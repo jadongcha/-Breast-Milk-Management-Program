@@ -298,7 +298,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi" },
-    { name = "fastapi" },
+    { name = "fastapi", specifier = ">=0.162.2" },
     { name = "pydantic", specifier = ">=2" },
     { name = "sqlalchemy", specifier = ">=2" },
     { name = "tzdata" },

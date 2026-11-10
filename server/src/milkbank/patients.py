@@ -20,8 +20,8 @@ _REQUIRED = {
 
 
 def normalize_phone(raw: str) -> str:
-    digits = re.sub(r"\D", "", raw)
-    if not re.fullmatch(r"01\d{8,9}", digits):
+    digits = re.sub(r"\D", "", raw, flags=re.ASCII)
+    if not re.fullmatch(r"01\d{8,9}", digits, flags=re.ASCII):
         raise BadRequest("전화번호 형식이 올바르지 않습니다")
     return digits
 
@@ -29,8 +29,8 @@ def normalize_phone(raw: str) -> str:
 def bed_sort_key(bed: str) -> tuple:
     # 숫자 조각은 (0, 정수), 문자 조각은 (1, 문자열)로 만들어 타입이 섞여도 비교 가능하게 한다.
     return tuple(
-        (0, int(part), "") if part.isdigit() else (1, 0, part)
-        for part in re.split(r"(\d+)", bed)
+        (0, int(part), "") if part.isdecimal() and part.isascii() else (1, 0, part)
+        for part in re.split(r"(\d+)", bed, flags=re.ASCII)
         if part != ""
     )
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "NICU breast-milk inventory server"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi",
+    "fastapi>=0.162.2",
     "sqlalchemy>=2",
     "argon2-cffi",
     "pydantic>=2",

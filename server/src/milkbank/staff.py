@@ -23,9 +23,12 @@ _BAD_LOGIN = "아이디 또는 비밀번호가 올바르지 않습니다"
 def create_staff(
     db: Session, clock: Clock, *, username: str, name: str, role: Role
 ) -> tuple[Staff, str]:
-    username = username.strip()
+    username = username.strip().lower()
     if not username:
         raise BadRequest("아이디를 입력해 주세요")
+    name = name.strip()
+    if not name:
+        raise BadRequest("이름을 입력해 주세요")
     if db.scalar(select(Staff.id).where(Staff.username == username)) is not None:
         raise Conflict("이미 사용 중인 아이디입니다")
     temp = generate_temp_password()
@@ -47,7 +50,7 @@ def create_staff(
 
 
 def login(db: Session, clock: Clock, username: str, password: str) -> tuple[Staff, str]:
-    staff = db.scalar(select(Staff).where(Staff.username == username.strip()))
+    staff = db.scalar(select(Staff).where(Staff.username == username.strip().lower()))
     if (
         staff is None
         or not staff.active
@@ -62,7 +65,11 @@ def login(db: Session, clock: Clock, username: str, password: str) -> tuple[Staf
 
 
 def authenticate(
-    db: Session, clock: Clock, raw_token: str | None, idle_minutes: int
+    db: Session,
+    clock: Clock,
+    raw_token: str | None,
+    idle_minutes: int,
+    refresh: bool = True,
 ) -> Staff:
     if not raw_token:
         raise Unauthorized("로그인이 필요합니다")
@@ -78,7 +85,8 @@ def authenticate(
     staff = db.get(Staff, session.staff_id)
     if staff is None or not staff.active:
         raise Unauthorized("로그인이 필요합니다")
-    session.last_seen_at = now
+    if refresh:
+        session.last_seen_at = now
     return staff
 
 

@@ -115,7 +115,7 @@ def cancel_record(
         if target.staff_id != staff.id:
             raise Forbidden("본인이 입력한 기록만 취소할 수 있습니다")
         if now - target.created_at > timedelta(minutes=cancel_window_minutes):
-            raise Forbidden("입력 후 10분이 지나 관리자만 취소할 수 있습니다")
+            raise Forbidden(f"입력 후 {cancel_window_minutes}분이 지나 관리자만 취소할 수 있습니다")
     if target.kind == RecordKind.INTAKE and balance(db, target.patient_id) - target.count < 0:
         raise Conflict("취소하면 재고가 음수가 됩니다")
     record = StockRecord(

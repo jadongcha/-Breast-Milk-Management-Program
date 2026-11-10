@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from .. import staff as staff_service
 from ..models import Staff
 from ..schemas import LoginIn, LoginOut, PasswordChangeIn, StaffOut
-from .deps import DbDep, bearer_token, current_staff, current_staff_any
+from .deps import DbDep, bearer_token, current_staff_any, current_staff_check
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,5 +48,6 @@ def me(staff: Annotated[Staff, Depends(current_staff_any)]):
 
 
 @router.get("/check", status_code=204)
-def check(_: Annotated[Staff, Depends(current_staff)]):
+def check(_: Annotated[Staff, Depends(current_staff_check)]):
+    # 마지막 활동 시각을 갱신하지 않는다(주기적 확인이 자동 로그아웃을 막지 않도록).
     return Response(status_code=204)

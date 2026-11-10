@@ -50,10 +50,30 @@ def current_staff_any(request: Request, db: DbDep) -> Staff:
     )
 
 
-def current_staff(staff: Annotated[Staff, Depends(current_staff_any)]) -> Staff:
+def current_staff_no_refresh(request: Request, db: DbDep) -> Staff:
+    """로그인 유지 확인용: 마지막 활동 시각을 갱신하지 않는다."""
+    config: Config = request.app.state.config
+    return staff_service.authenticate(
+        db,
+        request.app.state.clock,
+        bearer_token(request),
+        config.staff_idle_minutes,
+        refresh=False,
+    )
+
+
+def _require_password_changed(staff: Staff) -> Staff:
     if staff.must_change_password:
         raise Forbidden("비밀번호를 먼저 변경해야 합니다")
     return staff
+
+
+def current_staff(staff: Annotated[Staff, Depends(current_staff_any)]) -> Staff:
+    return _require_password_changed(staff)
+
+
+def current_staff_check(staff: Annotated[Staff, Depends(current_staff_no_refresh)]) -> Staff:
+    return _require_password_changed(staff)
 
 
 def require_admin(staff: Annotated[Staff, Depends(current_staff)]) -> Staff:

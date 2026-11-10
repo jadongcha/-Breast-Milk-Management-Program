@@ -21,6 +21,10 @@ def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
     async def _domain_error(_: Request, e: DomainError):
         return JSONResponse(status_code=e.status_code, content={"detail": e.message})
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
     app.include_router(auth.router)
     app.include_router(staff.router)
     app.include_router(patients.router)
