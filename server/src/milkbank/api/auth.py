@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 
 from .. import staff as staff_service
+from ..errors import DomainError
 from ..models import Staff
 from ..schemas import LoginIn, LoginOut, PasswordChangeIn, StaffOut
 from .deps import DbDep, bearer_token, current_staff_any, current_staff_check
@@ -12,9 +13,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginOut)
 def login(body: LoginIn, request: Request, db: DbDep):
-    staff, token = staff_service.login(
-        db, request.app.state.clock, body.username, body.password
-    )
+    config = request.app.state.config
+    try:
+        staff, token = staff_service.login(
+            db,
+            request.app.state.clock,
+            body.username,
+            body.password,
+            lock_threshold=config.login_lock_threshold,
+            lock_minutes=config.login_lock_minutes,
+        )
+    except DomainError:
+        # 실패 횟수 기록이 오류 응답에도 남도록 저장한 뒤 다시 던진다.
+        db.commit()
+        raise
     return LoginOut(
         token=token,
         must_change_password=staff.must_change_password,

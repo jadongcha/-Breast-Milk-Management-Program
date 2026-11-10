@@ -6,8 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .clock import Clock
-from .errors import BadRequest, Conflict, NotFound, Unauthorized
-from .models import AuthSession, Role, Staff
+from .errors import BadRequest, Conflict, NotFound, TooManyRequests, Unauthorized
+from .models import AuthSession, LoginAttempt, Role, Staff
 from .security import (
     check_password_policy,
     generate_temp_password,
@@ -18,6 +18,8 @@ from .security import (
 )
 
 _BAD_LOGIN = "아이디 또는 비밀번호가 올바르지 않습니다"
+# 없는 아이디도 같은 시간이 걸리도록 비교하는 더미 해시(모듈 로드 시 한 번 계산).
+_DUMMY_HASH = hash_password("dummy-password-for-timing")
 
 
 def create_staff(
@@ -49,16 +51,47 @@ def create_staff(
     return staff, temp
 
 
-def login(db: Session, clock: Clock, username: str, password: str) -> tuple[Staff, str]:
-    staff = db.scalar(select(Staff).where(Staff.username == username.strip().lower()))
+def login(
+    db: Session,
+    clock: Clock,
+    username: str,
+    password: str,
+    *,
+    lock_threshold: int = 5,
+    lock_minutes: int = 10,
+) -> tuple[Staff, str]:
+    key = username.strip().lower()
+    now = clock.now()
+    attempt = db.get(LoginAttempt, key)
+    if attempt is not None and attempt.locked_until is not None and now < attempt.locked_until:
+        raise TooManyRequests(
+            f"로그인을 {lock_threshold}번 실패해 {lock_minutes}분 동안 잠겼습니다. "
+            "잠시 후 다시 시도해 주세요"
+        )
+    staff = db.scalar(select(Staff).where(Staff.username == key))
+    if staff is None:
+        verify_password(_DUMMY_HASH, password)
     if (
         staff is None
         or not staff.active
         or not verify_password(staff.password_hash, password)
     ):
+        if attempt is None:
+            attempt = LoginAttempt(username=key, failed_count=1)
+            db.add(attempt)
+        elif attempt.locked_until is not None:
+            # 잠금이 끝난 기록: 새로 센다.
+            attempt.failed_count = 1
+            attempt.locked_until = None
+        else:
+            attempt.failed_count += 1
+        if attempt.failed_count >= lock_threshold:
+            attempt.locked_until = now + timedelta(minutes=lock_minutes)
+            attempt.failed_count = 0
+        db.flush()
         raise Unauthorized(_BAD_LOGIN)
+    db.execute(delete(LoginAttempt).where(LoginAttempt.username == key))
     raw, hashed = new_token()
-    now = clock.now()
     db.add(AuthSession(token_hash=hashed, staff_id=staff.id, created_at=now, last_seen_at=now))
     db.flush()
     return staff, raw
@@ -127,6 +160,7 @@ def reset_password(db: Session, staff_id: int) -> str:
     staff.password_hash = hash_password(temp)
     staff.must_change_password = True
     delete_sessions(db, staff.id)
+    db.execute(delete(LoginAttempt).where(LoginAttempt.username == staff.username))
     return temp
 
 

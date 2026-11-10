@@ -24,3 +24,7 @@ class NotFound(DomainError):
 
 class Conflict(DomainError):
     status_code = 409
+
+
+class TooManyRequests(DomainError):
+    status_code = 429
