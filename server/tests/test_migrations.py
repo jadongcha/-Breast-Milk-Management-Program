@@ -157,3 +157,82 @@ def test_cli_rejects_legacy_db(tmp_path, monkeypatch, capsys):
         cli.main()
     assert e.value.code == 1
     assert LEGACY_MSG in capsys.readouterr().err
+
+
+def _split_top_level(body: str) -> frozenset[str]:
+    parts, depth, cur = [], 0, []
+    for ch in body:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur))
+    return frozenset(" ".join(p.split()) for p in parts)
+
+
+def _normalize(kind: str, sql: str):
+    if kind == "table":
+        head, body = sql.split("(", 1)
+        return (" ".join(head.split()), _split_top_level(body.rsplit(")", 1)[0]))
+    return " ".join(sql.split())
+
+
+def _schema(engine) -> dict:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT type, name, tbl_name, sql FROM sqlite_master"
+                " WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
+                " AND name != 'alembic_version'"
+            )
+        ).all()
+    return {(t, n, tbl): _normalize(t, sql) for t, n, tbl, sql in rows}
+
+
+def _diff(a: dict, b: dict) -> bool:
+    return a != b
+
+
+def test_schema_sql_identical_to_create_all(tmp_path, clock):
+    p1, p2 = tmp_path / "a.db", tmp_path / "b.db"
+    e1, e2 = make_engine(p1), make_engine(p2)
+    try:
+        Base.metadata.create_all(e1)
+        migrate(e2, p2, clock.now())
+        s1, s2 = _schema(e1), _schema(e2)
+        assert s1.keys() == s2.keys()
+        assert not _diff(s1, s2), {k: (s1[k], s2[k]) for k in s1 if s1[k] != s2[k]}
+        assert ("index", "ux_stock_record_cancel_target", "stock_record") in s2
+        assert "WHERE kind = 'cancel'" in s2[("index", "ux_stock_record_cancel_target", "stock_record")]
+    finally:
+        e1.dispose()
+        e2.dispose()
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("'cancel')", "'cancel', 'extra')"),  # (a) enum에 멤버가 늘었는데 migration 없음
+        (" WHERE kind = 'cancel'", ""),  # (b) 부분 인덱스에서 WHERE가 빠짐
+    ],
+)
+def test_schema_comparison_detects_differences(tmp_path, clock, old, new):
+    path = tmp_path / "c.db"
+    eng = make_engine(path)
+    try:
+        migrate(eng, path, clock.now())
+        expected = _schema(eng)
+        mutated = {}
+        for key, val in expected.items():
+            if key[0] == "table":
+                mutated[key] = (val[0], frozenset(c.replace(old, new) for c in val[1]))
+            else:
+                mutated[key] = val.replace(old, new)
+        assert _diff(expected, mutated)
+    finally:
+        eng.dispose()
