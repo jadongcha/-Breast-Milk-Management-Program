@@ -1,0 +1,169 @@
+package app.milkbank.ui.register
+
+import android.Manifest
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.milkbank.R
+import app.milkbank.ui.IdleAwareDialog
+import app.milkbank.ui.idleTouch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+private val ButtonHeight = 56.dp
+
+@Composable
+fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    var granted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
+    LaunchedEffect(state) { if (state == RegisterState.Done) onDone() }
+
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.register_prompt),
+                modifier = Modifier.weight(1f),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            if (debuggable) {
+                var menuOpen by remember { mutableStateOf(false) }
+                Box {
+                    TextButton(onClick = { menuOpen = true }, modifier = Modifier.heightIn(min = ButtonHeight)) {
+                        Text(stringResource(R.string.menu_more), fontSize = 18.sp)
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.idleTouch()) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.register_from_file), fontSize = 18.sp) },
+                            modifier = Modifier.heightIn(min = ButtonHeight),
+                            onClick = {
+                                menuOpen = false
+                                scope.launch {
+                                    val raw = withContext(Dispatchers.IO) {
+                                        runCatching { File(context.getExternalFilesDir(null), "qr.txt").readText().trim() }
+                                            .getOrDefault("")
+                                    }
+                                    viewModel.onScanned(raw)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (granted) {
+                QrScanner(
+                    enabled = state == RegisterState.Scanning,
+                    onQr = viewModel::onScanned,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.camera_permission_needed), fontSize = 20.sp, textAlign = TextAlign.Center)
+                    Text(
+                        stringResource(R.string.camera_permission_rationale),
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    Button(
+                        onClick = { launcher.launch(Manifest.permission.CAMERA) },
+                        modifier = Modifier.heightIn(min = ButtonHeight),
+                    ) { Text(stringResource(R.string.camera_permission_request), fontSize = 18.sp) }
+                }
+            }
+            if (state == RegisterState.Checking) {
+                Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                    ) {
+                        CircularProgressIndicator()
+                        Text(stringResource(R.string.register_checking), fontSize = 20.sp)
+                    }
+                }
+            }
+        }
+
+        (state as? RegisterState.Error)?.let { error ->
+            Text(
+                stringResource(error.messageRes),
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Button(onClick = viewModel::dismiss, modifier = Modifier.fillMaxWidth().heightIn(min = ButtonHeight)) {
+                Text(stringResource(R.string.register_rescan), fontSize = 18.sp)
+            }
+        }
+    }
+
+    if (state is RegisterState.ConfirmDifferentServer) {
+        // Dismissing (outside tap / back) means cancel; only [바꾸기] switches servers.
+        IdleAwareDialog(onDismissRequest = viewModel::dismiss) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(stringResource(R.string.register_pin_changed), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = viewModel::dismiss,
+                            modifier = Modifier.weight(1f).heightIn(min = ButtonHeight),
+                        ) { Text(stringResource(R.string.cancel), fontSize = 18.sp) }
+                        Button(
+                            onClick = viewModel::confirmDifferentServer,
+                            modifier = Modifier.weight(1f).heightIn(min = ButtonHeight),
+                        ) { Text(stringResource(R.string.register_change_server), fontSize = 18.sp) }
+                    }
+                }
+            }
+        }
+    }
+}

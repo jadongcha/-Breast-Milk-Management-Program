@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
             LocalIdleTouch provides { container.idleWatcher.touch() },
         ) {
             Column(Modifier.fillMaxSize().idleTouch()) {
-                if (!online) OfflineBanner()
+                if (!online && current.config != null) OfflineBanner() // no server yet: nothing to be offline from
                 Box(Modifier.weight(1f)) {
                     AppNavHost(navController, start)
                     SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
