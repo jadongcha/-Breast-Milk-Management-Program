@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import load_pem_x509_certificate
 
 from milkbank import setup_tls as setup_tls_cli
+from milkbank import tls as tls_mod
 from milkbank.tls import (
     TlsError,
     parse_host,
@@ -123,7 +124,7 @@ def test_parse_host_strips():
     assert parse_host("  192.168.0.10 ") == "192.168.0.10"
 
 
-@pytest.mark.parametrize("bad", ["", "  ", "192.168.0.10 x", "-bad.local", "a..b", "bad-.local"])
+@pytest.mark.parametrize("bad", ["", "  ", "192.168.0.10 x", "-bad.local", "a..b", "bad-.local", "fe80::1%a b,c", "fe80::1%]@evil.com:1#", "fe80::1%eth0", "a" * 250 + ".com"])
 def test_bad_host_rejected(bad):
     with pytest.raises(TlsError, match="서버 주소가 올바르지 않습니다"):
         parse_host(bad)
@@ -161,3 +162,64 @@ def test_cli_success_and_error(tmp_path, monkeypatch, capsys):
         setup_tls_cli.main()
     assert e.value.code == 1
     assert "서버 주소가 올바르지 않습니다" in capsys.readouterr().err
+
+
+def test_corrupt_key_file_is_tls_error(tmp_path):
+    (tmp_path / "server.key").write_text("garbage")
+    with pytest.raises(TlsError, match="기존 인증서 키 파일을 읽을 수 없습니다. --new-key로 다시 만드세요"):
+        setup_tls(tmp_path, ["192.168.0.10"], 8443, False, NOW)
+
+
+def test_encrypted_key_file_is_tls_error(tmp_path):
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    pem = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.BestAvailableEncryption(b"pw"),
+    )
+    (tmp_path / "server.key").write_bytes(pem)
+    with pytest.raises(TlsError, match="기존 인증서 키 파일"):
+        setup_tls(tmp_path, ["192.168.0.10"], 8443, False, NOW)
+
+
+def test_cli_corrupt_key_no_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MILKBANK_DB", str(tmp_path / "m.db"))
+    (tmp_path / "tls").mkdir()
+    (tmp_path / "tls" / "server.key").write_text("garbage")
+    monkeypatch.setattr(sys, "argv", ["x", "--host", "192.168.0.10"])
+    with pytest.raises(SystemExit) as e:
+        setup_tls_cli.main()
+    assert e.value.code == 1
+    err = capsys.readouterr().err
+    assert "기존 인증서 키 파일을 읽을 수 없습니다" in err
+    assert "Traceback" not in err
+
+
+def test_long_dns_name_works_without_cn(tmp_path):
+    host = ".".join(["a" * 20] * 3 + ["com"])  # 71 chars
+    assert len(host) > 64
+    setup_tls(tmp_path, [host], 8443, False, NOW)
+    cert = load_pem_x509_certificate((tmp_path / "server.crt").read_bytes())
+    assert host in _san(cert).get_values_for_type(x509.DNSName)
+    assert cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME) == []
+
+
+def test_name_over_253_rejected():
+    host = ".".join(["a" * 60] * 5 + ["com"])
+    assert len(host) > 253
+    with pytest.raises(TlsError, match="서버 주소가 올바르지 않습니다"):
+        parse_host(host)
+
+
+def test_failed_new_key_run_keeps_old_key(tmp_path, monkeypatch):
+    setup_tls(tmp_path, ["192.168.0.10"], 8443, False, NOW)
+    before = (tmp_path / "server.key").read_bytes()
+
+    def boom(*a, **k):
+        raise TlsError("실패")
+
+    monkeypatch.setattr(tls_mod, "build_certificate", boom)
+    with pytest.raises(TlsError):
+        setup_tls(tmp_path, ["192.168.0.10"], 8443, True, NOW)
+    assert (tmp_path / "server.key").read_bytes() == before

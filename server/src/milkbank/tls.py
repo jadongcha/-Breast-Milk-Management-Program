@@ -32,6 +32,8 @@ def _is_ip(host: str) -> bool:
 
 def parse_host(raw: str) -> str:
     host = raw.strip()
+    if "%" in host:
+        host = ""
     if host and not _is_ip(host):
         labels = host.split(".")
         if len(host) <= 253 and all(_LABEL.match(label) for label in labels):
@@ -42,13 +44,17 @@ def parse_host(raw: str) -> str:
     return host
 
 
-def load_or_create_key(path: Path, new_key: bool) -> tuple[ec.EllipticCurvePrivateKey, bool]:
-    if path.exists() and not new_key:
+def _load_key(path: Path) -> ec.EllipticCurvePrivateKey:
+    try:
         key = serialization.load_pem_private_key(path.read_bytes(), password=None)
-        if not isinstance(key, ec.EllipticCurvePrivateKey):
-            raise TlsError(f"인증서 키 형식이 올바르지 않습니다: {path}")
-        return key, True
-    key = ec.generate_private_key(ec.SECP256R1())
+    except (ValueError, TypeError):
+        key = None
+    if not isinstance(key, ec.EllipticCurvePrivateKey):
+        raise TlsError("기존 인증서 키 파일을 읽을 수 없습니다. --new-key로 다시 만드세요")
+    return key
+
+
+def _write_key(key: ec.EllipticCurvePrivateKey, path: Path) -> None:
     pem = key.private_bytes(
         serialization.Encoding.PEM,
         serialization.PrivateFormat.PKCS8,
@@ -58,6 +64,13 @@ def load_or_create_key(path: Path, new_key: bool) -> tuple[ec.EllipticCurvePriva
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "wb") as f:
         f.write(pem)
+
+
+def load_or_create_key(path: Path, new_key: bool) -> tuple[ec.EllipticCurvePrivateKey, bool]:
+    if path.exists() and not new_key:
+        return _load_key(path), True
+    key = ec.generate_private_key(ec.SECP256R1())
+    _write_key(key, path)
     return key, False
 
 
@@ -65,7 +78,10 @@ def build_certificate(
     key: ec.EllipticCurvePrivateKey, hosts: list[str], now: datetime
 ) -> x509.Certificate:
     now = now.astimezone(UTC).replace(microsecond=0)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hosts[0])])
+    # CN은 64자까지만 허용된다. 더 길면 SAN만 쓴다.
+    name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, hosts[0])] if len(hosts[0]) <= 64 else []
+    )
     names: list[x509.GeneralName] = [
         x509.IPAddress(ipaddress.ip_address(h)) if _is_ip(h) else x509.DNSName(h) for h in hosts
     ]
@@ -127,13 +143,18 @@ def setup_tls(
         raise TlsError("포트 번호가 올바르지 않습니다")
     hosts = [parse_host(h) for h in hosts]
     tls_dir.mkdir(parents=True, exist_ok=True)
-    key, reused = load_or_create_key(tls_dir / "server.key", new_key)
+    key_path = tls_dir / "server.key"
+    reused = key_path.exists() and not new_key
+    key = _load_key(key_path) if reused else ec.generate_private_key(ec.SECP256R1())
+    # 실패할 수 있는 작업을 먼저 끝내고, 새 키는 마지막에 쓴다(기존 키 보호).
     cert = build_certificate(key, hosts, now)
     pin = spki_pin(key)
     url = server_url(hosts[0], port)
-    (tls_dir / "server.crt").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     qr_path = tls_dir / "server-qr.png"
     write_qr_png(qr_payload(url, pin), qr_path)
+    if not reused:
+        _write_key(key, key_path)
+    (tls_dir / "server.crt").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     info = {"hosts": hosts, "port": port, "url": url, "pin": pin}
     (tls_dir / "server.json").write_text(
         json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8"
