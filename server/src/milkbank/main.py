@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .api import auth, patients, staff
+from .api import auth, patients, staff, stock
 from .clock import Clock, SystemClock
 from .config import Config, load_config
 from .db import init_db, make_engine, make_session_factory
@@ -24,6 +24,7 @@ def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(staff.router)
     app.include_router(patients.router)
+    app.include_router(stock.router)
     return app
 
 

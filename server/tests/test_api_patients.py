@@ -19,6 +19,7 @@ def test_admin_creates_patient(client, admin_token, clock):
     r = client.post("/patients", json=P, headers=auth(admin_token))
     assert r.status_code == 201
     assert r.json()["status"] == "admitted" and r.json()["admitted_on"] == "2026-11-10"
+    assert r.json()["balance"] == 0
 
 
 @pytest.mark.parametrize("raw", ["010-1234-5678", "010 1234 5678", "01012345678"])

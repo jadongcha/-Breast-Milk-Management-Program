@@ -1,9 +1,10 @@
 """pydantic 입력/출력 모델."""
-from datetime import date
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import PatientStatus, Role
+from .models import DiscardReason, PatientStatus, RecordKind, Role
 
 
 class StaffOut(BaseModel):
@@ -91,3 +92,34 @@ class PatientOut(BaseModel):
     alert_enabled: bool
     days_threshold: int | None
     packs_threshold: int | None
+    balance: int
+
+
+class RecordIn(BaseModel):
+    kind: Literal["intake", "use", "discard"]
+    count: int
+    discard_reason: DiscardReason | None = None
+    memo: str | None = None
+
+
+class RecordOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: RecordKind
+    count: int
+    discard_reason: DiscardReason | None
+    target_id: int | None
+    memo: str | None
+    staff_name: str
+    created_at: datetime
+    canceled: bool
+
+
+class RecordResult(BaseModel):
+    record: RecordOut
+    balance: int
+
+
+class PatientDetail(PatientOut):
+    records: list[RecordOut]

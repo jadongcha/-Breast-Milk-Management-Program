@@ -146,14 +146,7 @@ class RecordView:
     canceled: bool
 
 
-def recent_records(db: Session, patient_id: int, limit: int = 50) -> list[RecordView]:
-    rows = db.execute(
-        select(StockRecord, Staff.name)
-        .join(Staff, Staff.id == StockRecord.staff_id)
-        .where(StockRecord.patient_id == patient_id)
-        .order_by(StockRecord.created_at.desc(), StockRecord.id.desc())
-        .limit(limit)
-    ).all()
+def _views(db: Session, patient_id: int, rows) -> list[RecordView]:
     canceled = set(
         db.scalars(
             select(StockRecord.target_id).where(
@@ -177,3 +170,24 @@ def recent_records(db: Session, patient_id: int, limit: int = 50) -> list[Record
         )
         for r, name in rows
     ]
+
+
+def recent_records(db: Session, patient_id: int, limit: int = 50) -> list[RecordView]:
+    rows = db.execute(
+        select(StockRecord, Staff.name)
+        .join(Staff, Staff.id == StockRecord.staff_id)
+        .where(StockRecord.patient_id == patient_id)
+        .order_by(StockRecord.created_at.desc(), StockRecord.id.desc())
+        .limit(limit)
+    ).all()
+    return _views(db, patient_id, rows)
+
+
+def record_view(db: Session, record: StockRecord) -> RecordView:
+    """기록 한 건을 recent_records와 같은 형태(직원 이름, 취소 여부 포함)로 돌려준다."""
+    rows = db.execute(
+        select(StockRecord, Staff.name)
+        .join(Staff, Staff.id == StockRecord.staff_id)
+        .where(StockRecord.id == record.id)
+    ).all()
+    return _views(db, record.patient_id, rows)[0]
