@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .api import auth
+from .api import auth, staff
 from .clock import Clock, SystemClock
 from .config import Config, load_config
 from .db import init_db, make_engine, make_session_factory
@@ -22,6 +22,7 @@ def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
         return JSONResponse(status_code=e.status_code, content={"detail": e.message})
 
     app.include_router(auth.router)
+    app.include_router(staff.router)
     return app
 
 

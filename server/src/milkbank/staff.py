@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .clock import Clock
-from .errors import BadRequest, Conflict, Unauthorized
+from .errors import BadRequest, Conflict, NotFound, Unauthorized
 from .models import AuthSession, Role, Staff
 from .security import (
     check_password_policy,
@@ -100,3 +100,33 @@ def change_password(db: Session, staff: Staff, current: str, new: str) -> None:
 
 def delete_sessions(db: Session, staff_id: int) -> None:
     db.execute(delete(AuthSession).where(AuthSession.staff_id == staff_id))
+
+
+def list_staff(db: Session) -> list[Staff]:
+    return list(db.scalars(select(Staff).order_by(Staff.username)))
+
+
+def _get_staff(db: Session, staff_id: int) -> Staff:
+    staff = db.get(Staff, staff_id)
+    if staff is None:
+        raise NotFound("직원을 찾을 수 없습니다")
+    return staff
+
+
+def reset_password(db: Session, staff_id: int) -> str:
+    staff = _get_staff(db, staff_id)
+    temp = generate_temp_password()
+    staff.password_hash = hash_password(temp)
+    staff.must_change_password = True
+    delete_sessions(db, staff.id)
+    return temp
+
+
+def set_active(db: Session, actor: Staff, staff_id: int, active: bool) -> Staff:
+    staff = _get_staff(db, staff_id)
+    if not active and staff.id == actor.id:
+        raise BadRequest("본인 계정은 비활성화할 수 없습니다")
+    staff.active = active
+    if not active:
+        delete_sessions(db, staff.id)
+    return staff
