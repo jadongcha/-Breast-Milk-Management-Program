@@ -1,27 +1,137 @@
 package app.milkbank
 
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.compose.rememberNavController
+import app.milkbank.server.ServerConfig
+import app.milkbank.session.LogoutReason
+import app.milkbank.ui.AppNavHost
+import app.milkbank.ui.LocalOnline
+import app.milkbank.ui.Login
 import app.milkbank.ui.MilkbankTheme
+import app.milkbank.ui.OfflineBanner
+import app.milkbank.ui.Password
+import app.milkbank.ui.navigateClearingStack
+import app.milkbank.ui.startDestination
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+
+/** Wrapper so "not loaded yet" differs from "loaded, no server registered". */
+private class LoadedConfig(val config: ServerConfig?)
 
 class MainActivity : ComponentActivity() {
+    private val container get() = (application as MilkbankApp).container
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    container.idleWatcher.check()
+                    delay(1000)
+                }
+            }
+        }
         setContent {
             MilkbankTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.app_name))
-                    }
+                    AppRoot()
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        container.connection.start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        container.idleWatcher.check()
+    }
+
+    override fun onStop() {
+        container.connection.stop()
+        super.onStop()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        container.idleWatcher.touch()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    @Composable
+    private fun AppRoot() {
+        val loaded by remember { container.serverConfigStore.config.map { LoadedConfig(it) } }
+            .collectAsStateWithLifecycle(initialValue = null)
+        val current = loaded
+        if (current == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return
+        }
+
+        val navController = rememberNavController()
+        val session = container.session
+        val online by container.connection.online.collectAsStateWithLifecycle()
+        val sessionState by session.state.collectAsStateWithLifecycle()
+        val logoutReason by session.logoutReason.collectAsStateWithLifecycle()
+        val passwordRequired by session.passwordRequired.collectAsStateWithLifecycle()
+        val snackbar = remember { SnackbarHostState() }
+        val scope = rememberCoroutineScope()
+        val loginAgain = stringResource(R.string.login_again)
+        // Decided once, after the stored config has been read.
+        val start = remember { startDestination(current.config, sessionState) }
+
+        // A new session invalidates any stale logout reason.
+        LaunchedEffect(sessionState) {
+            if (sessionState != null) session.consumeLogoutReason()
+        }
+        LaunchedEffect(logoutReason) {
+            val reason = logoutReason ?: return@LaunchedEffect
+            navController.navigateClearingStack(Login)
+            session.consumeLogoutReason()
+            if (reason == LogoutReason.EXPIRED || reason == LogoutReason.IDLE) {
+                scope.launch { snackbar.showSnackbar(loginAgain) }
+            }
+        }
+        LaunchedEffect(passwordRequired) {
+            if (passwordRequired) {
+                navController.navigateClearingStack(Password)
+                session.consumePasswordRequired()
+            }
+        }
+
+        CompositionLocalProvider(LocalOnline provides online) {
+            Column(Modifier.fillMaxSize()) {
+                if (!online) OfflineBanner()
+                Box(Modifier.weight(1f)) {
+                    AppNavHost(navController, start)
+                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
                 }
             }
         }

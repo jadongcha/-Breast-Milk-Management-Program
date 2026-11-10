@@ -19,6 +19,8 @@ import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.server.ServerConfigStore
 import app.milkbank.server.shouldResetSession
+import app.milkbank.session.ConnectionMonitor
+import app.milkbank.session.IdleWatcher
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
 import okhttp3.OkHttpClient
@@ -49,6 +51,8 @@ class AppContainer(context: Context) {
 
     val serverConfigStore = ServerConfigStore(appContext.serverDataStore)
     val session = SessionManager(SystemClock)
+    val idleWatcher = IdleWatcher(SystemClock, session)
+    val connection = ConnectionMonitor(scope) { auth.ping() }
 
     private val _repositories = MutableStateFlow(build(api = null))
     val repositories: StateFlow<Repositories> = _repositories.asStateFlow()
