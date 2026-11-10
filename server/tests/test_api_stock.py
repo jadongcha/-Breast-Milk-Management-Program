@@ -74,3 +74,19 @@ def test_unauthenticated_record(client):
     r = client.post("/patients/1/records", json={"kind": "intake", "count": 1})
     assert r.status_code == 401
     assert client.post("/records/1/cancel").status_code == 401
+
+
+def test_record_includes_staff_id(client, app, admin_token):
+    from conftest import make_staff
+    from milkbank.models import Role
+
+    a_id, a_token = make_staff(client, app, Role.NURSE, "nurseA")
+    b_id, b_token = make_staff(client, app, Role.NURSE, "nurseB")
+    pid = create_patient(client, admin_token)
+    r = rec(client, a_token, pid, "intake", 4)
+    assert r.status_code == 201
+    assert r.json()["record"]["staff_id"] == a_id
+    rec(client, b_token, pid, "use", 1)
+    d = client.get(f"/patients/{pid}", headers=auth(a_token)).json()
+    by_kind = {x["kind"]: x["staff_id"] for x in d["records"]}
+    assert by_kind == {"use": b_id, "in": a_id}

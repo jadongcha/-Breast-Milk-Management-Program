@@ -141,6 +141,7 @@ class RecordView:
     discard_reason: DiscardReason | None
     target_id: int | None
     memo: str | None
+    staff_id: int
     staff_name: str
     created_at: datetime
     canceled: bool
@@ -164,17 +165,18 @@ def _views(db: Session, patient_id: int, rows) -> list[RecordView]:
             discard_reason=r.discard_reason,
             target_id=r.target_id,
             memo=r.memo,
+            staff_id=staff_id,
             staff_name=name,
             created_at=r.created_at,
             canceled=r.id in canceled,
         )
-        for r, name in rows
+        for r, staff_id, name in rows
     ]
 
 
 def recent_records(db: Session, patient_id: int, limit: int = 50) -> list[RecordView]:
     rows = db.execute(
-        select(StockRecord, Staff.name)
+        select(StockRecord, Staff.id, Staff.name)
         .join(Staff, Staff.id == StockRecord.staff_id)
         .where(StockRecord.patient_id == patient_id)
         .order_by(StockRecord.created_at.desc(), StockRecord.id.desc())
@@ -186,7 +188,7 @@ def recent_records(db: Session, patient_id: int, limit: int = 50) -> list[Record
 def record_view(db: Session, record: StockRecord) -> RecordView:
     """기록 한 건을 recent_records와 같은 형태(직원 이름, 취소 여부 포함)로 돌려준다."""
     rows = db.execute(
-        select(StockRecord, Staff.name)
+        select(StockRecord, Staff.id, Staff.name)
         .join(Staff, Staff.id == StockRecord.staff_id)
         .where(StockRecord.id == record.id)
     ).all()

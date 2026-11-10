@@ -111,6 +111,7 @@ class RecordOut(BaseModel):
     discard_reason: DiscardReason | None
     target_id: int | None
     memo: str | None
+    staff_id: int
     staff_name: str
     created_at: datetime
     canceled: bool
