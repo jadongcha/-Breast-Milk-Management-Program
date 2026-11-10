@@ -152,3 +152,12 @@ def test_cli_creates_admin(tmp_path, monkeypatch, capsys):
             assert s.role == Role.ADMIN and s.must_change_password is True
     finally:
         engine.dispose()
+
+
+def test_live_session_of_deactivated_staff_is_rejected(client, app, nurse_token):
+    assert client.get("/auth/me", headers=auth(nurse_token)).status_code == 200
+    with app.state.session_factory() as db:
+        db.scalar(select(Staff).where(Staff.username == "nurse1")).active = False
+        db.commit()
+    r = client.get("/auth/me", headers=auth(nurse_token))
+    assert r.status_code == 401 and r.json()["detail"] == "로그인이 필요합니다"
