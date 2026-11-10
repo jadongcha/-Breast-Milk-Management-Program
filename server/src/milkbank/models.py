@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
@@ -118,6 +118,16 @@ class Patient(Base):
 class StockRecord(Base):
     __tablename__ = "stock_record"
 
+    __table_args__ = (
+        Index("ix_stock_record_patient_id", "patient_id"),
+        Index(
+            "ux_stock_record_cancel_target",
+            "target_id",
+            unique=True,
+            sqlite_where=text("kind = 'cancel'"),
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
     kind: Mapped[RecordKind] = mapped_column(_enum_type(RecordKind))
@@ -129,3 +139,11 @@ class StockRecord(Base):
     memo: Mapped[str | None]
     staff_id: Mapped[int] = mapped_column(ForeignKey("staff.id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempt"
+
+    username: Mapped[str] = mapped_column(primary_key=True)
+    failed_count: Mapped[int] = mapped_column(default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime)

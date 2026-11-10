@@ -3,8 +3,6 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base
-
 
 def make_engine(db_path: Path) -> Engine:
     db_path = Path(db_path)
@@ -33,6 +31,3 @@ def make_engine(db_path: Path) -> Engine:
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(engine, expire_on_commit=False)
 
-
-def init_db(engine: Engine) -> None:
-    Base.metadata.create_all(engine)

@@ -4,8 +4,9 @@ import sys
 from . import staff as staff_service
 from .clock import SystemClock
 from .config import load_config
-from .db import init_db, make_engine, make_session_factory
+from .db import make_engine, make_session_factory
 from .errors import DomainError
+from .migrate import LegacyDatabaseError, migrate
 from .models import Role
 
 
@@ -23,14 +24,18 @@ def main() -> None:
     parser.add_argument("--name", required=True)
     args = parser.parse_args()
 
-    engine = make_engine(load_config().db_path)
+    db_path = load_config().db_path
+    engine = make_engine(db_path)
     try:
-        init_db(engine)
+        migrate(engine, db_path, SystemClock().now())
         with make_session_factory(engine)() as db:
             _, temp = staff_service.create_staff(
                 db, SystemClock(), username=args.username, name=args.name, role=Role.ADMIN
             )
             db.commit()
+    except LegacyDatabaseError as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(1) from None
     except DomainError as e:
         print(e.message, file=sys.stderr)
         raise SystemExit(1) from None

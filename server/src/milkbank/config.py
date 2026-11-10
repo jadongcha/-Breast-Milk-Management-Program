@@ -8,6 +8,16 @@ class Config:
     db_path: Path
     staff_idle_minutes: int = 10
     cancel_window_minutes: int = 10
+    login_lock_threshold: int = 5
+    login_lock_minutes: int = 10
+
+    @property
+    def tls_dir(self) -> Path:
+        return self.db_path.parent / "tls"
+
+    @property
+    def backups_dir(self) -> Path:
+        return self.db_path.parent / "backups"
 
 
 def load_config() -> Config:

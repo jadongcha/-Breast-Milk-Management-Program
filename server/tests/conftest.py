@@ -4,13 +4,15 @@ import pytest
 from sqlalchemy.orm import Session
 
 from milkbank.clock import FakeClock
-from milkbank.db import init_db, make_engine, make_session_factory
+from milkbank.db import make_engine, make_session_factory
+from milkbank.migrate import migrate
 
 
 @pytest.fixture
-def engine(tmp_path):
-    eng = make_engine(tmp_path / "test.db")
-    init_db(eng)
+def engine(tmp_path, clock):
+    path = tmp_path / "test.db"
+    eng = make_engine(path)
+    migrate(eng, path, clock.now())
     yield eng
     eng.dispose()
 

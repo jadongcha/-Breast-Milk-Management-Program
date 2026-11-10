@@ -4,16 +4,18 @@ from fastapi.responses import JSONResponse
 from .api import auth, patients, staff, stock
 from .clock import Clock, SystemClock
 from .config import Config, load_config
-from .db import init_db, make_engine, make_session_factory
+from .db import make_engine, make_session_factory
 from .errors import DomainError
+from .migrate import migrate
 
 
 def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
+    clock = clock or SystemClock()
     engine = make_engine(config.db_path)
-    init_db(engine)
+    migrate(engine, config.db_path, clock.now())
     app = FastAPI(title="milkbank")
     app.state.config = config
-    app.state.clock = clock or SystemClock()
+    app.state.clock = clock
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
 
