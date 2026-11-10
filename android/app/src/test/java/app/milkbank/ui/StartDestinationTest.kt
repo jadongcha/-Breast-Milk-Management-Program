@@ -6,6 +6,14 @@ import app.milkbank.session.Session
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+class ConfigClearedTest {
+    private val c = ServerConfig("https://x", "p")
+    @Test fun clearedGoesToRegister() = assertEquals(true, configClearedNeedsRegister(c, null))
+    @Test fun firstLoadNullDoesNot() = assertEquals(false, configClearedNeedsRegister(null, null))
+    @Test fun registeringDoesNot() = assertEquals(false, configClearedNeedsRegister(null, c))
+    @Test fun changedServerDoesNot() = assertEquals(false, configClearedNeedsRegister(c, ServerConfig("https://y", "q")))
+}
+
 class StartDestinationTest {
     private val config = ServerConfig("https://10.0.0.1:8443", "pin")
     private fun session(mustChange: Boolean) =

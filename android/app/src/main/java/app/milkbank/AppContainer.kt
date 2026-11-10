@@ -6,6 +6,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.datastore.preferences.preferencesDataStore
 import app.milkbank.api.AuthInterceptor
 import app.milkbank.api.MilkbankApi
+import app.milkbank.core.ElapsedClock
 import app.milkbank.core.SystemClock
 import app.milkbank.data.AuthRepository
 import app.milkbank.data.HttpAuthRepository
@@ -51,8 +52,9 @@ class AppContainer(context: Context) {
 
     val serverConfigStore = ServerConfigStore(appContext.serverDataStore)
     val session = SessionManager(SystemClock)
-    val idleWatcher = IdleWatcher(SystemClock, session)
-    val connection = ConnectionMonitor(scope) { auth.ping() }
+    val idleWatcher = IdleWatcher(ElapsedClock, session)
+    private val _serverKey = MutableStateFlow<Any?>(null)
+    val connection = ConnectionMonitor(scope, serverKey = _serverKey) { auth.ping() }
 
     private val _repositories = MutableStateFlow(build(api = null))
     val repositories: StateFlow<Repositories> = _repositories.asStateFlow()
@@ -74,6 +76,8 @@ class AppContainer(context: Context) {
                 currentClient = client
                 previousConfig = config
                 _repositories.value = build(api)
+                // Non-null only once an api exists; a change makes the monitor probe again at once.
+                _serverKey.value = if (config != null) _repositories.value else null
                 oldClient?.let {
                     it.dispatcher.executorService.shutdown()
                     it.connectionPool.evictAll()
@@ -92,6 +96,7 @@ class AppContainer(context: Context) {
     fun overrideForTest(repositories: Repositories) {
         overridden = true
         _repositories.value = repositories
+        _serverKey.value = repositories
     }
 
     private fun build(api: MilkbankApi?) = Repositories(

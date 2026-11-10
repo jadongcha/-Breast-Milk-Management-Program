@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -30,7 +32,11 @@ import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.ui.AppNavHost
 import app.milkbank.ui.LocalOnline
+import app.milkbank.ui.LocalIdleTouch
 import app.milkbank.ui.Login
+import app.milkbank.ui.Register
+import app.milkbank.ui.configClearedNeedsRegister
+import app.milkbank.ui.idleTouch
 import app.milkbank.ui.MilkbankTheme
 import app.milkbank.ui.OfflineBanner
 import app.milkbank.ui.Password
@@ -80,6 +86,11 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        container.idleWatcher.touch()
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         container.idleWatcher.touch()
         return super.dispatchTouchEvent(ev)
@@ -107,6 +118,14 @@ class MainActivity : ComponentActivity() {
         // Decided once, after the stored config has been read.
         val start = remember { startDestination(current.config, sessionState) }
 
+        var previousConfig by remember { mutableStateOf(current.config) }
+        LaunchedEffect(current.config) {
+            if (configClearedNeedsRegister(previousConfig, current.config)) {
+                navController.navigateClearingStack(Register)
+            }
+            previousConfig = current.config
+        }
+
         // A new session invalidates any stale logout reason.
         LaunchedEffect(sessionState) {
             if (sessionState != null) session.consumeLogoutReason()
@@ -126,8 +145,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        CompositionLocalProvider(LocalOnline provides online) {
-            Column(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(
+            LocalOnline provides online,
+            LocalIdleTouch provides { container.idleWatcher.touch() },
+        ) {
+            Column(Modifier.fillMaxSize().idleTouch()) {
                 if (!online) OfflineBanner()
                 Box(Modifier.weight(1f)) {
                     AppNavHost(navController, start)

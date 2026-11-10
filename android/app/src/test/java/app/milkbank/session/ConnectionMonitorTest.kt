@@ -45,6 +45,27 @@ class ConnectionMonitorTest {
     }
 
     @Test
+    fun noServer_reportsOnlineWithoutProbing_thenProbesWhenRegistered() = runTest {
+        var calls = 0
+        val key = kotlinx.coroutines.flow.MutableStateFlow<Any?>(null)
+        val m = ConnectionMonitor(backgroundScope, serverKey = key, probe = { calls++; false })
+        m.start()
+        runCurrent()
+        assertEquals(0, calls)
+        assertTrue(m.online.value)
+        key.value = "server1"
+        runCurrent()
+        assertEquals(1, calls)
+        assertFalse(m.online.value)
+        key.value = "server2" // repositories changed: probe again at once
+        runCurrent()
+        assertEquals(2, calls)
+        key.value = null // unregistered: back to online
+        runCurrent()
+        assertTrue(m.online.value)
+    }
+
+    @Test
     fun stop_haltsProbing() = runTest {
         var calls = 0
         val m = ConnectionMonitor(backgroundScope, probe = { calls++; true })
