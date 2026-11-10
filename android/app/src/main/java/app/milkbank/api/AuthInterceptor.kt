@@ -19,7 +19,7 @@ class AuthInterceptor(private val session: SessionManager) : Interceptor {
         val response = chain.proceed(request)
         val isLogin = original.url.encodedPath.endsWith("/auth/login")
         when (response.code) {
-            401 -> if (token != null && !isLogin) session.end(LogoutReason.EXPIRED)
+            401 -> if (token != null && !isLogin) session.endIfToken(token, LogoutReason.EXPIRED)
             403 -> {
                 val body = try {
                     response.peekBody(PEEK_LIMIT).string()

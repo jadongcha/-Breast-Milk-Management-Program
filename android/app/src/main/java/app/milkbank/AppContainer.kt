@@ -16,8 +16,12 @@ import app.milkbank.data.PatientRepository
 import app.milkbank.data.StaffRepository
 import app.milkbank.data.StockRepository
 import app.milkbank.server.HttpClientFactory
+import app.milkbank.server.ServerConfig
 import app.milkbank.server.ServerConfigStore
+import app.milkbank.server.shouldResetSession
+import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,16 +54,26 @@ class AppContainer(context: Context) {
     val repositories: StateFlow<Repositories> = _repositories.asStateFlow()
 
     private var overridden = false
+    private var previousConfig: ServerConfig? = null
+    private var currentClient: OkHttpClient? = null
 
     init {
         scope.launch {
             serverConfigStore.config.collect { config ->
                 if (overridden) return@collect
-                val api = config?.let {
-                    val client = HttpClientFactory.okHttp(it, listOf(AuthInterceptor(session)), debuggable)
-                    HttpClientFactory.retrofit(it, client).create(MilkbankApi::class.java)
+                if (shouldResetSession(previousConfig, config)) session.end(LogoutReason.USER)
+                val oldClient = currentClient
+                val client = config?.let {
+                    HttpClientFactory.okHttp(it, listOf(AuthInterceptor(session)), debuggable)
                 }
+                val api = config?.let { HttpClientFactory.retrofit(it, client!!).create(MilkbankApi::class.java) }
+                currentClient = client
+                previousConfig = config
                 _repositories.value = build(api)
+                oldClient?.let {
+                    it.dispatcher.executorService.shutdown()
+                    it.connectionPool.evictAll()
+                }
             }
         }
     }

@@ -7,7 +7,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.SerializationException
 import retrofit2.HttpException
+import java.time.DateTimeException
 import java.io.IOException
 
 private val errorJson = Json { ignoreUnknownKeys = true }
@@ -35,6 +37,12 @@ suspend fun <T> apiCall(networkErrorMessage: String, block: suspend () -> T): Ap
             null
         }
         ApiResult.Err(ApiError(e.code(), parseDetail(body) ?: networkErrorMessage))
+    } catch (e: SerializationException) {
+        ApiResult.Err(ApiError(null, networkErrorMessage))
+    } catch (e: IllegalArgumentException) {
+        ApiResult.Err(ApiError(null, networkErrorMessage))
+    } catch (e: DateTimeException) {
+        ApiResult.Err(ApiError(null, networkErrorMessage))
     } catch (e: IOException) {
         ApiResult.Err(ApiError(null, networkErrorMessage))
     }

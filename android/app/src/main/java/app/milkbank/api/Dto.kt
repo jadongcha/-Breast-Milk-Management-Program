@@ -75,7 +75,11 @@ data class StaffPatchRequest(val active: Boolean)
 @Serializable
 data class TempPasswordResponse(@SerialName("temp_password") val tempPassword: String)
 
-/** Body for both POST /patients and PATCH /patients/{id}. Dates are "YYYY-MM-DD". */
+/**
+ * Body for both POST /patients and PATCH /patients/{id}. Dates are "YYYY-MM-DD".
+ * No defaults on purpose: every field must be encoded (the server PATCH uses exclude_unset,
+ * so an omitted field means "unchanged"). On create, admittedOn = null means server default (today).
+ */
 @Serializable
 data class PatientForm(
     @SerialName("reg_no") val regNo: String,
@@ -83,10 +87,10 @@ data class PatientForm(
     val bed: String,
     @SerialName("guardian_name") val guardianName: String,
     @SerialName("guardian_phone") val guardianPhone: String,
-    @SerialName("admitted_on") val admittedOn: String? = null,
-    @SerialName("alert_enabled") val alertEnabled: Boolean = true,
-    @SerialName("days_threshold") val daysThreshold: Int? = null,
-    @SerialName("packs_threshold") val packsThreshold: Int? = null,
+    @SerialName("admitted_on") val admittedOn: String?,
+    @SerialName("alert_enabled") val alertEnabled: Boolean,
+    @SerialName("days_threshold") val daysThreshold: Int?,
+    @SerialName("packs_threshold") val packsThreshold: Int?,
 )
 
 @Serializable

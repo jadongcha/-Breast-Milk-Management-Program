@@ -1,9 +1,7 @@
 package app.milkbank.session
 
-import app.cash.turbine.test
 import app.milkbank.api.StaffDto
 import app.milkbank.core.FakeClock
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -24,21 +22,41 @@ class SessionManagerTest {
     }
 
     @Test
-    fun endEmitsReason() = runTest {
+    fun logoutReasonSurvivesWithoutCollectorAndIsConsumable() {
         val m = manager()
-        m.events.test {
-            m.start("tok", staff)
-            m.end(LogoutReason.EXPIRED)
-            assertEquals(LogoutReason.EXPIRED, awaitItem())
-        }
+        m.start("tok", staff)
+        m.end(LogoutReason.EXPIRED)
+        assertEquals(LogoutReason.EXPIRED, m.logoutReason.value)
+        m.consumeLogoutReason()
+        assertNull(m.logoutReason.value)
     }
 
     @Test
-    fun endWithoutSessionEmitsNothing() = runTest {
+    fun endWithoutSessionRecordsNothing() {
         val m = manager()
-        m.events.test {
-            m.end(LogoutReason.EXPIRED)
-            expectNoEvents()
-        }
+        m.end(LogoutReason.EXPIRED)
+        assertNull(m.logoutReason.value)
+    }
+
+    @Test
+    fun passwordRequiredIsConsumable() {
+        val m = manager()
+        m.requirePasswordChange()
+        assertEquals(true, m.passwordRequired.value)
+        m.consumePasswordRequired()
+        assertEquals(false, m.passwordRequired.value)
+    }
+
+    @Test
+    fun endIfTokenIgnoresStaleToken() {
+        val m = manager()
+        m.start("A", staff)
+        m.start("B", staff)
+        m.endIfToken("A", LogoutReason.EXPIRED)
+        assertEquals("B", m.state.value?.token)
+        assertNull(m.logoutReason.value)
+        m.endIfToken("B", LogoutReason.EXPIRED)
+        assertNull(m.state.value)
+        assertEquals(LogoutReason.EXPIRED, m.logoutReason.value)
     }
 }

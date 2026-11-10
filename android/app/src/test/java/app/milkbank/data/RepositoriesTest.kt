@@ -1,8 +1,8 @@
 package app.milkbank.data
 
-import app.cash.turbine.test
 import app.milkbank.api.AuthInterceptor
 import app.milkbank.api.MilkbankApi
+import app.milkbank.api.PatientForm
 import app.milkbank.api.StaffDto
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
@@ -80,11 +80,9 @@ class RepositoriesTest {
     fun unauthorizedEndsSessionAsExpired() = runTest {
         session.start("tok", staff)
         server.enqueue(MockResponse().setResponseCode(401).setBody("""{"detail":"인증이 필요합니다"}"""))
-        session.events.test {
-            val r = HttpPatientRepository(api, net).list(null)
-            assertEquals(ApiResult.Err(ApiError(401, "인증이 필요합니다")), r)
-            assertEquals(LogoutReason.EXPIRED, awaitItem())
-        }
+        val r = HttpPatientRepository(api, net).list(null)
+        assertEquals(ApiResult.Err(ApiError(401, "인증이 필요합니다")), r)
+        assertEquals(LogoutReason.EXPIRED, session.logoutReason.value)
         assertNull(session.state.value)
     }
 
@@ -92,11 +90,9 @@ class RepositoriesTest {
     fun loginUnauthorizedDoesNotEndSession() = runTest {
         session.start("tok", staff)
         server.enqueue(MockResponse().setResponseCode(401).setBody("""{"detail":"아이디 또는 비밀번호가 올바르지 않습니다"}"""))
-        session.events.test {
-            val r = auth().login("kim", "bad")
-            assertEquals(401, (r as ApiResult.Err).error.status)
-            expectNoEvents()
-        }
+        val r = auth().login("kim", "bad")
+        assertEquals(401, (r as ApiResult.Err).error.status)
+        assertNull(session.logoutReason.value)
         assertNotNull(session.state.value)
     }
 
@@ -104,11 +100,9 @@ class RepositoriesTest {
     fun passwordRequiredIsEmitted() = runTest {
         session.start("tok", staff)
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"비밀번호를 먼저 변경해야 합니다"}"""))
-        session.passwordRequired.test {
-            val r = HttpPatientRepository(api, net).list(null)
-            assertEquals(403, (r as ApiResult.Err).error.status)
-            awaitItem()
-        }
+        val r = HttpPatientRepository(api, net).list(null)
+        assertEquals(403, (r as ApiResult.Err).error.status)
+        assertTrue(session.passwordRequired.value)
         assertNotNull(session.state.value)
     }
 
@@ -116,10 +110,8 @@ class RepositoriesTest {
     fun otherForbiddenDoesNotEmit() = runTest {
         session.start("tok", staff)
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"권한이 없습니다"}"""))
-        session.passwordRequired.test {
-            HttpPatientRepository(api, net).list(null)
-            expectNoEvents()
-        }
+        HttpPatientRepository(api, net).list(null)
+        assertEquals(false, session.passwordRequired.value)
     }
 
     private fun rec(id: Int, at: String) =
@@ -184,5 +176,69 @@ class RepositoriesTest {
         server.enqueue(MockResponse().setResponseCode(503))
         val repo = HttpAuthRepository(api, session, net, healthApiFactory = { api })
         assertEquals(503, (repo.health(ServerConfig("https://x", "p")) as ApiResult.Err).error.status)
+    }
+
+    @Test
+    fun patchBodyAlwaysEncodesAllFields() = runBlocking {
+        session.start("tok", staff)
+        val body = """{"id":2,"reg_no":"R1","baby_name":"a","bed":"3","guardian_name":"m","guardian_phone":"010",
+            "status":"admitted","admitted_on":"2026-11-01","discharged_on":null,"alert_enabled":true,
+            "days_threshold":null,"packs_threshold":null,"balance":0}"""
+        server.enqueue(MockResponse().setBody(body).addHeader("Content-Type", "application/json"))
+        val form = PatientForm("R1", "a", "3", "m", "010", null, true, null, null)
+        HttpPatientRepository(api, net).update(2, form)
+        val b = server.takeRequest().body.readUtf8()
+        assertTrue(
+            b,
+            b.contains("\"alert_enabled\":true") && b.contains("\"days_threshold\":null") &&
+                b.contains("\"packs_threshold\":null"),
+        )
+    }
+
+    @Test
+    fun wrongShapeBodyIsErrNotCrash() = runBlocking {
+        session.start("tok", staff)
+        server.enqueue(MockResponse().setBody("""{"unexpected":1}""").addHeader("Content-Type", "application/json"))
+        val r = HttpPatientRepository(api, net).detail(2)
+        assertEquals(ApiResult.Err(ApiError(null, net)), r)
+    }
+
+    @Test
+    fun badTimestampIsErrNotCrash() = runBlocking {
+        session.start("tok", staff)
+        val body = """{"record":${rec(1, "not-a-time")},"balance":1}"""
+        server.enqueue(MockResponse().setBody(body).addHeader("Content-Type", "application/json"))
+        assertEquals(ApiResult.Err(ApiError(null, net)), HttpStockRepository(api, net).cancel(1))
+    }
+
+    @Test
+    fun staleUnauthorizedDoesNotEndNewerSession() = runBlocking {
+        session.start("A", staff)
+        val relogin = object : okhttp3.Interceptor {
+            override fun intercept(chain: okhttp3.Interceptor.Chain): okhttp3.Response {
+                val resp = chain.proceed(chain.request())
+                session.start("B", staff) // user logged in again while the request was in flight
+                return resp
+            }
+        }
+        // Interceptors run outermost first: AuthInterceptor sees the response before relogin does,
+        // so order relogin inside it to simulate the swap happening before the 401 is handled.
+        val c = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session)).addInterceptor(relogin).build()
+        val a = HttpClientFactory.retrofit(ServerConfig(server.url("/").toString(), "x"), c)
+            .create(MilkbankApi::class.java)
+        server.enqueue(MockResponse().setResponseCode(401))
+        HttpPatientRepository(a, net).list(null)
+        assertEquals("B", session.state.value?.token)
+        assertNull(session.logoutReason.value)
+        c.dispatcher.executorService.shutdown()
+    }
+
+    @Test
+    fun pingReflectsHealth() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+        assertTrue(auth().ping())
+        server.enqueue(MockResponse().setResponseCode(503))
+        assertEquals(false, auth().ping())
+        assertEquals(false, HttpAuthRepository(null, session, net).ping())
     }
 }

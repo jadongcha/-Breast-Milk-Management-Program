@@ -2,11 +2,8 @@ package app.milkbank.session
 
 import app.milkbank.api.StaffDto
 import app.milkbank.core.Clock
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 
@@ -19,22 +16,43 @@ class SessionManager(@Suppress("unused") private val clock: Clock) {
     private val _state = MutableStateFlow<Session?>(null)
     val state: StateFlow<Session?> = _state.asStateFlow()
 
-    private val _events = MutableSharedFlow<LogoutReason>(extraBufferCapacity = 8)
-    val events: SharedFlow<LogoutReason> = _events.asSharedFlow()
+    // Consumable state (not events): survives periods with no collector.
+    private val _logoutReason = MutableStateFlow<LogoutReason?>(null)
+    val logoutReason: StateFlow<LogoutReason?> = _logoutReason.asStateFlow()
 
-    private val _passwordRequired = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
-    val passwordRequired: SharedFlow<Unit> = _passwordRequired.asSharedFlow()
+    private val _passwordRequired = MutableStateFlow(false)
+    val passwordRequired: StateFlow<Boolean> = _passwordRequired.asStateFlow()
 
     fun start(token: String, staff: StaffDto) {
         _state.value = Session(token, staff)
     }
 
-    /** Ends the session and emits [reason]; a no-op when nobody is logged in. */
+    /** Ends the session and records [reason]; a no-op when nobody is logged in. */
     fun end(reason: LogoutReason) {
-        if (_state.getAndUpdate { null } != null) _events.tryEmit(reason)
+        if (_state.getAndUpdate { null } != null) _logoutReason.value = reason
+    }
+
+    /** Ends the session only if it is still the one holding [token] (guards against stale 401s). */
+    fun endIfToken(token: String, reason: LogoutReason) {
+        while (true) {
+            val cur = _state.value
+            if (cur == null || cur.token != token) return
+            if (_state.compareAndSet(cur, null)) {
+                _logoutReason.value = reason
+                return
+            }
+        }
+    }
+
+    fun consumeLogoutReason() {
+        _logoutReason.value = null
     }
 
     fun requirePasswordChange() {
-        _passwordRequired.tryEmit(Unit)
+        _passwordRequired.value = true
+    }
+
+    fun consumePasswordRequired() {
+        _passwordRequired.value = false
     }
 }

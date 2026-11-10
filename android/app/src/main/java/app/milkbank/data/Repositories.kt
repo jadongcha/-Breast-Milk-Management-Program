@@ -21,6 +21,7 @@ import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import okhttp3.OkHttpClient
 
 interface AuthRepository {
     suspend fun login(username: String, password: String): ApiResult<LoginResponse>
@@ -29,6 +30,9 @@ interface AuthRepository {
 
     /** Pre-registration check against [config]; Ok on HTTP 200. */
     suspend fun health(config: ServerConfig): ApiResult<Unit>
+
+    /** Connectivity check through the current pinned client (GET /health); false when unreachable. */
+    suspend fun ping(): Boolean
 }
 
 interface PatientRepository {
@@ -64,7 +68,7 @@ class HttpAuthRepository(
     private val api: MilkbankApi?,
     private val session: SessionManager,
     private val networkError: String,
-    private val healthApiFactory: (ServerConfig) -> MilkbankApi = ::pinnedApi,
+    private val healthApiFactory: ((ServerConfig) -> MilkbankApi)? = null,
 ) : AuthRepository {
     override suspend fun login(username: String, password: String): ApiResult<LoginResponse> {
         val r = api.call(networkError) { it.login(LoginRequest(username, password)) }
@@ -82,13 +86,29 @@ class HttpAuthRepository(
         api.call(networkError) { it.changePassword(PasswordChangeRequest(current, new)) }
 
     override suspend fun health(config: ServerConfig): ApiResult<Unit> {
-        val temp = healthApiFactory(config)
-        return apiCall(networkError) { temp.health() }
+        var client: OkHttpClient? = null
+        val temp = if (healthApiFactory == null) {
+            pinnedApi(config).also { client = it.second }.first
+        } else {
+            healthApiFactory.invoke(config)
+        }
+        try {
+            return apiCall(networkError) { temp.health() }
+        } finally {
+            client?.let {
+                it.dispatcher.executorService.shutdown()
+                it.connectionPool.evictAll()
+            }
+        }
     }
+
+    override suspend fun ping(): Boolean = api.call(networkError) { it.health() } is ApiResult.Ok
 }
 
-private fun pinnedApi(config: ServerConfig): MilkbankApi =
-    HttpClientFactory.retrofit(config, HttpClientFactory.okHttp(config)).create(MilkbankApi::class.java)
+private fun pinnedApi(config: ServerConfig): Pair<MilkbankApi, OkHttpClient> {
+    val client = HttpClientFactory.okHttp(config)
+    return HttpClientFactory.retrofit(config, client).create(MilkbankApi::class.java) to client
+}
 
 class HttpPatientRepository(private val api: MilkbankApi?, private val networkError: String) : PatientRepository {
     override suspend fun list(q: String?) = api.call(networkError) { it.patients(q?.takeIf { s -> s.isNotBlank() }) }
