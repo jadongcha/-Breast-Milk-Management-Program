@@ -4,14 +4,18 @@ import sys
 import uvicorn
 
 from milkbank.cli import _utf8_streams
+from milkbank.clock import SystemClock
 from milkbank.config import load_config
+from milkbank.db import make_engine
+from milkbank.migrate import LegacyDatabaseError, UnknownRevisionError, migrate
 
 _MISSING = "먼저 milkbank-setup-tls를 실행하세요"
 
 
 def main() -> None:
     _utf8_streams()
-    tls_dir = load_config().tls_dir
+    config = load_config()
+    tls_dir = config.tls_dir
     crt = tls_dir / "server.crt"
     key = tls_dir / "server.key"
     try:
@@ -24,6 +28,14 @@ def main() -> None:
     if not (crt.is_file() and key.is_file()):
         print(_MISSING, file=sys.stderr)
         raise SystemExit(1)
+    engine = make_engine(config.db_path)
+    try:
+        migrate(engine, config.db_path, SystemClock().now())
+    except (LegacyDatabaseError, UnknownRevisionError) as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(1) from None
+    finally:
+        engine.dispose()
     print(f"서버 주소: {url}", flush=True)
     uvicorn.run(
         "milkbank.main:app_factory",
@@ -32,4 +44,5 @@ def main() -> None:
         port=port,
         ssl_certfile=str(crt),
         ssl_keyfile=str(key),
+        ssl_ciphers="ECDHE+AESGCM:ECDHE+CHACHA20",
     )

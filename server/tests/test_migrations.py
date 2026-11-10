@@ -12,7 +12,16 @@ from milkbank import cli
 from milkbank import patients as patient_service
 from milkbank import staff as staff_service
 from milkbank.db import make_engine
-from milkbank.migrate import LegacyDatabaseError, _alembic_config, backup_db, migrate
+from alembic.operations import Operations
+
+from milkbank.migrate import (
+    LegacyDatabaseError,
+    UnknownRevisionError,
+    _alembic_config,
+    backup_db,
+    foreign_keys_off,
+    migrate,
+)
 from milkbank.models import Base, RecordKind, Role, StockRecord
 from milkbank.schemas import PatientCreate
 
@@ -178,7 +187,8 @@ def _split_top_level(body: str) -> frozenset[str]:
 def _normalize(kind: str, sql: str):
     if kind == "table":
         head, body = sql.split("(", 1)
-        return (" ".join(head.split()), _split_top_level(body.rsplit(")", 1)[0]))
+        head = " ".join(head.split()).replace('"', "")
+        return (head, _split_top_level(body.rsplit(")", 1)[0]))
     return " ".join(sql.split())
 
 
@@ -234,5 +244,88 @@ def test_schema_comparison_detects_differences(tmp_path, clock, old, new):
             else:
                 mutated[key] = val.replace(old, new)
         assert _diff(expected, mutated)
+    finally:
+        eng.dispose()
+
+
+def test_normalize_strips_quotes_in_table_header():
+    plain = _normalize("table", "CREATE TABLE stock_record (id INTEGER NOT NULL, PRIMARY KEY (id))")
+    quoted = _normalize(
+        "table", 'CREATE TABLE "stock_record" (' + chr(10) + chr(9) + "id INTEGER NOT NULL, " + chr(10) + chr(9) + "PRIMARY KEY (id)" + chr(10) + ")"
+    )
+    assert plain == quoted
+
+
+def _rebuild_patient(conn):
+    mctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+    with mctx.begin_transaction():
+        with Operations(mctx).batch_alter_table("patient") as batch:
+            batch.alter_column("bed", nullable=True)
+
+
+def test_batch_rebuild_fails_without_helper(seeded_engine):
+    with seeded_engine.connect() as conn:
+        with pytest.raises(IntegrityError):
+            _rebuild_patient(conn)
+
+
+def test_batch_rebuild_works_with_helper(seeded_engine):
+    with seeded_engine.connect() as conn:
+        with foreign_keys_off(conn):
+            _rebuild_patient(conn)
+        assert conn.exec_driver_sql("SELECT count(*) FROM patient").scalar() == 1
+        assert conn.exec_driver_sql("SELECT count(*) FROM stock_record").scalar() == 1
+        conn.rollback()
+
+
+def test_foreign_keys_back_on_after_helper(seeded_engine):
+    with seeded_engine.connect() as conn:
+        conn.rollback()
+        with foreign_keys_off(conn):
+            assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 0
+        assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
+        conn.rollback()
+
+
+def test_helper_raises_on_dangling_foreign_key(seeded_engine):
+    with seeded_engine.connect() as conn:
+        with pytest.raises(RuntimeError, match="stock_record"):
+            with foreign_keys_off(conn):
+                conn.exec_driver_sql("UPDATE stock_record SET patient_id = 999")
+                conn.commit()
+        assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
+        conn.rollback()
+
+
+def test_unknown_revision_rejected_before_backup(tmp_path, clock):
+    path = tmp_path / "u.db"
+    eng = make_engine(path)
+    try:
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            conn.execute(text("UPDATE alembic_version SET version_num = '9999'"))
+            conn.commit()
+        with pytest.raises(UnknownRevisionError) as e:
+            migrate(eng, path, clock.now())
+        assert str(e.value) == (
+            "이 DB는 더 새로운 버전의 프로그램에서 만들어졌습니다. 프로그램을 업데이트하세요"
+        )
+        assert not (tmp_path / "backups").exists()
+    finally:
+        eng.dispose()
+
+
+def test_backup_goes_to_config_backups_dir(tmp_path, clock):
+    path = tmp_path / "bk.db"
+    eng = make_engine(path)
+    try:
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            command.downgrade(_alembic_config(conn), "base")
+            conn.commit()
+        from milkbank.config import Config
+
+        backup = migrate(eng, path, clock.now())
+        assert backup.parent == Config(db_path=path).backups_dir
     finally:
         eng.dispose()

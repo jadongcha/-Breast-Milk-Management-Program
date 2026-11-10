@@ -113,18 +113,23 @@ def test_ipv6_url():
     assert server_url("fd00::10", 8443) == "https://[fd00::10]:8443"
 
 
-def test_ipv6_host_in_cert(tmp_path):
-    r = setup_tls(tmp_path, ["fd00::10"], 8443, False, NOW)
+def test_ipv6_extra_host_in_cert(tmp_path):
+    r = setup_tls(tmp_path, ["192.168.0.10", "fd00::10"], 8443, False, NOW)
     cert = load_pem_x509_certificate((tmp_path / "server.crt").read_bytes())
     assert ipaddress.ip_address("fd00::10") in _san(cert).get_values_for_type(x509.IPAddress)
-    assert r.url == "https://[fd00::10]:8443"
+    assert r.url == "https://192.168.0.10:8443"
+
+
+def test_ipv6_first_host_rejected(tmp_path):
+    with pytest.raises(TlsError, match="첫 번째 서버 주소는 IPv4 주소나 이름이어야 합니다"):
+        setup_tls(tmp_path, ["fd00::10", "192.168.0.10"], 8443, False, NOW)
 
 
 def test_parse_host_strips():
     assert parse_host("  192.168.0.10 ") == "192.168.0.10"
 
 
-@pytest.mark.parametrize("bad", ["", "  ", "192.168.0.10 x", "-bad.local", "a..b", "bad-.local", "fe80::1%a b,c", "fe80::1%]@evil.com:1#", "fe80::1%eth0", "a" * 250 + ".com"])
+@pytest.mark.parametrize("bad", ["", "  ", "192.168.0.10 x", "-bad.local", "a..b", "bad-.local", "fe80::1%a b,c", "fe80::1%]@evil.com:1#", "fe80::1%eth0", "192.168.0.256", "192.168.000.010", "10.0.0.1.5", "a" * 250 + ".com"])
 def test_bad_host_rejected(bad):
     with pytest.raises(TlsError, match="서버 주소가 올바르지 않습니다"):
         parse_host(bad)

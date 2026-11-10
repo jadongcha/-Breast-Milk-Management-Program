@@ -94,3 +94,32 @@ def admin_token(client, app):
 @pytest.fixture
 def nurse_token(client, app):
     return make_staff(client, app, Role.NURSE, "nurse1")[1]
+
+
+@pytest.fixture
+def seeded_engine(engine, clock):
+    """마이그레이션된 DB에 직원·환자·재고 기록을 하나씩 넣어 돌려준다(0002+ 마이그레이션 시험용)."""
+    from milkbank import patients as patient_service
+    from milkbank.models import RecordKind, StockRecord
+    from milkbank.schemas import PatientCreate
+
+    with make_session_factory(engine)() as session:
+        s, _ = staff_service.create_staff(
+            session, clock, username="seed", name="seed", role=Role.NURSE
+        )
+        p = patient_service.create_patient(
+            session,
+            clock,
+            PatientCreate(
+                reg_no="R1", baby_name="b", bed="1", guardian_name="g",
+                guardian_phone="01012345678",
+            ),
+        )
+        session.add(
+            StockRecord(
+                patient_id=p.id, kind=RecordKind.INTAKE, count=3, staff_id=s.id,
+                created_at=clock.now(),
+            )
+        )
+        session.commit()
+    return engine

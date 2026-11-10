@@ -117,3 +117,41 @@ def test_expired_lock_starts_fresh_count(client, app, clock):
         attempt = db.get(LoginAttempt, u)
         assert attempt.failed_count == 1
         assert attempt.locked_until is None
+
+
+def test_overlong_username_login_writes_nothing(client, app):
+    r = _login(client, "x" * 65, "whatever123")
+    assert r.status_code == 401
+    assert r.json()["detail"] == BAD
+    with app.state.session_factory() as db:
+        assert db.query(LoginAttempt).count() == 0
+
+
+def test_max_length_username_login_is_recorded(client, app, clock):
+    name = "y" * 64
+    assert _login(client, name, "whatever123").status_code == 401
+    with app.state.session_factory() as db:
+        attempt = db.get(LoginAttempt, name)
+        assert attempt is not None and attempt.failed_count == 1
+        assert attempt.last_failed_at == clock.now()
+
+
+def test_overlong_password_is_401_and_counted(client, app):
+    u = _nurse(client, app)
+    r = _login(client, u, "p" * 257)
+    assert r.status_code == 401
+    assert r.json()["detail"] == BAD
+    with app.state.session_factory() as db:
+        assert db.get(LoginAttempt, u).failed_count == 1
+
+
+def test_create_staff_rejects_overlong_username(db, clock):
+    import pytest
+
+    from milkbank import staff as staff_service
+    from milkbank.errors import BadRequest
+
+    with pytest.raises(BadRequest) as e:
+        staff_service.create_staff(db, clock, username="z" * 65, name="n", role=Role.NURSE)
+    assert e.value.message == "아이디는 64자 이하로 입력해 주세요"
+    staff_service.create_staff(db, clock, username="z" * 64, name="n", role=Role.NURSE)

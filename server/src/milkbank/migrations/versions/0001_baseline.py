@@ -7,8 +7,6 @@ Create Date: 2026-11-10 15:51:37.673179
 from alembic import op
 import sqlalchemy as sa
 
-from milkbank.models import UTCDateTime
-
 
 revision = '0001'
 down_revision = None
@@ -21,7 +19,8 @@ def upgrade() -> None:
     op.create_table('login_attempt',
     sa.Column('username', sa.String(), nullable=False),
     sa.Column('failed_count', sa.Integer(), nullable=False),
-    sa.Column('locked_until', UTCDateTime(), nullable=True),
+    sa.Column('locked_until', sa.DateTime(), nullable=True),
+    sa.Column('last_failed_at', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('username')
     )
     op.create_table('patient',
@@ -38,7 +37,7 @@ def upgrade() -> None:
     sa.Column('days_threshold', sa.Integer(), nullable=True),
     sa.Column('packs_threshold', sa.Integer(), nullable=True),
     sa.Column('alert_state', sa.Enum('normal', 'alerted', name='alertstate', native_enum=False, create_constraint=True, length=20), nullable=False),
-    sa.Column('created_at', UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('reg_no')
     )
@@ -50,7 +49,7 @@ def upgrade() -> None:
     sa.Column('password_hash', sa.String(), nullable=False),
     sa.Column('must_change_password', sa.Boolean(), nullable=False),
     sa.Column('active', sa.Boolean(), nullable=False),
-    sa.Column('created_at', UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('username')
     )
@@ -58,8 +57,8 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('token_hash', sa.String(), nullable=False),
     sa.Column('staff_id', sa.Integer(), nullable=False),
-    sa.Column('created_at', UTCDateTime(), nullable=False),
-    sa.Column('last_seen_at', UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('last_seen_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('token_hash')
@@ -73,7 +72,7 @@ def upgrade() -> None:
     sa.Column('target_id', sa.Integer(), nullable=True),
     sa.Column('memo', sa.String(), nullable=True),
     sa.Column('staff_id', sa.Integer(), nullable=False),
-    sa.Column('created_at', UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['patient_id'], ['patient.id'], ),
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.ForeignKeyConstraint(['target_id'], ['stock_record.id'], ),

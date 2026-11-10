@@ -17,6 +17,8 @@ from .security import (
     verify_password,
 )
 
+MAX_USERNAME_LEN = 64
+MAX_PASSWORD_LEN = 256
 _BAD_LOGIN = "아이디 또는 비밀번호가 올바르지 않습니다"
 # 없는 아이디도 같은 시간이 걸리도록 비교하는 더미 해시(모듈 로드 시 한 번 계산).
 _DUMMY_HASH = hash_password("dummy-password-for-timing")
@@ -28,6 +30,8 @@ def create_staff(
     username = username.strip().lower()
     if not username:
         raise BadRequest("아이디를 입력해 주세요")
+    if len(username) > MAX_USERNAME_LEN:
+        raise BadRequest("아이디는 64자 이하로 입력해 주세요")
     name = name.strip()
     if not name:
         raise BadRequest("이름을 입력해 주세요")
@@ -61,6 +65,11 @@ def login(
     lock_minutes: int = 10,
 ) -> tuple[Staff, str]:
     key = username.strip().lower()
+    if len(key) > MAX_USERNAME_LEN:
+        # 로그인 기록 표가 끝없이 커지지 않도록 기록하지 않는다.
+        verify_password(_DUMMY_HASH, password[:MAX_PASSWORD_LEN])
+        raise Unauthorized(_BAD_LOGIN)
+    too_long = len(password) > MAX_PASSWORD_LEN
     now = clock.now()
     attempt = db.get(LoginAttempt, key)
     if attempt is not None and attempt.locked_until is not None and now < attempt.locked_until:
@@ -69,11 +78,12 @@ def login(
             "잠시 후 다시 시도해 주세요"
         )
     staff = db.scalar(select(Staff).where(Staff.username == key))
-    if staff is None:
+    if staff is None and not too_long:
         verify_password(_DUMMY_HASH, password)
     if (
         staff is None
         or not staff.active
+        or too_long  # 너무 긴 비밀번호는 해시하지 않고 실패로 센다
         or not verify_password(staff.password_hash, password)
     ):
         if attempt is None:
@@ -85,6 +95,7 @@ def login(
             attempt.locked_until = None
         else:
             attempt.failed_count += 1
+        attempt.last_failed_at = now
         if attempt.failed_count >= lock_threshold:
             attempt.locked_until = now + timedelta(minutes=lock_minutes)
             attempt.failed_count = 0

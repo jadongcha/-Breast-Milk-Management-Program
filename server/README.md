@@ -5,7 +5,7 @@
 ## 설치 순서
 
 아래 명령은 모두 `server/` 폴더에서 실행한다(DB 경로가 상대 경로라서, 다른 폴더에서 실행하면 다른 DB가 만들어진다).
-1단계 때 만든 테스트용 DB(`data/milkbank.db`)가 있으면 **지우고 시작한다**(버전 기록이 없는 DB는 열지 않는다).
+1단계 때 만든 테스트용 DB가 있으면 **지우고 시작한다**(버전 기록이 없는 DB는 열지 않는다). `data/milkbank.db`, `data/milkbank.db-wal`, `data/milkbank.db-shm` 세 파일을 모두 지운다.
 
 1. 설치
 
@@ -19,7 +19,7 @@
    uv run milkbank-setup-tls --host <서버 PC의 내부 IP>
    ```
 
-   `--host`에는 기기가 서버에 접속할 주소(서버 PC의 내부 IP)를 준다. 여러 개를 줄 수 있고, QR에는 첫 번째 주소를 쓴다. 포트는 기본 8443이며 `--port`로 바꿀 수 있다.
+   `--host`에는 기기가 서버에 접속할 주소(서버 PC의 내부 IP)를 준다. 여러 개를 줄 수 있고, QR에는 첫 번째 주소를 쓴다. 첫 번째 주소는 IPv4 주소나 이름이어야 한다(IPv6는 두 번째부터 가능). 전산팀에 서버 PC의 IP를 **고정**(공유기/DHCP 예약)해 달라고 요청한다. IP가 바뀌면 기기가 서버를 찾지 못한다. 포트는 기본 8443이며 `--port`로 바꿀 수 있다.
    `data/tls/server-qr.png`를 출력해 신생아실에 보관한다. 기기 앱이 이 QR을 찍어 진짜 병원 서버를 알아본다.
 
 3. 첫 관리자 만들기
@@ -43,7 +43,14 @@
 
 - 서버 PC의 Windows 방화벽에서 8443 포트로 들어오는 연결을 허용한다(전산팀). `--port`를 바꿨다면 그 포트를 허용한다.
 - `data/` 폴더(DB, 백업, 개인키)는 서버 PC 밖으로 복사하지 않는다.
-- 개인키가 새면 `uv run milkbank-setup-tls --host <IP> --new-key`로 다시 만들고, 모든 기기에서 서버 등록 QR을 다시 찍어 등록한다. 주소만 바꿀 때는 `--new-key` 없이 다시 실행하면 키가 같아 기기를 다시 등록할 필요가 없다.
+- 개인키가 새면 `uv run milkbank-setup-tls --host <IP> --new-key`로 다시 만들고, 모든 기기에서 서버 등록 QR을 다시 찍어 등록한다.
+- 서버 등록 QR에는 **첫 번째 `--host` 주소와 포트**가 들어 있다. 첫 번째 주소나 포트를 바꾸거나 `--new-key`를 쓰면 모든 기기에서 QR을 다시 찍어야 한다. 이름이나 주소를 **추가**만 하면(첫 번째 주소는 그대로) 기기는 그대로 쓸 수 있다.
+- `milkbank-setup-tls`를 다시 실행했다면 `milkbank-serve`를 **껐다가 다시 켠다**. 인증서는 서버가 시작할 때만 읽는다.
+
+### 백업과 복원
+
+- DB 버전을 올릴 때마다 서버가 시작 전에 `data/backups/`에 백업을 만든다(`milkbank-<시각>-before-<버전>.db`). 이 폴더는 계속 커지므로 오래된 백업은 직접 지운다.
+- 백업으로 되돌리려면: 서버를 끄고 → `data/milkbank.db`를 백업 파일로 바꾸고 → `data/milkbank.db-wal`, `data/milkbank.db-shm`을 지우고 → 서버를 켠다.
 
 ### 관리자가 비밀번호를 잊었을 때
 
@@ -61,6 +68,14 @@ uv run uvicorn milkbank.main:app_factory --factory --host 127.0.0.1 --port 8000
 `GET /health`는 로그인 없이 `{"status": "ok"}`를 돌려준다(연결 확인용). `GET /auth/check`는 로그인 유지 여부만 확인하며 자동 로그아웃 시간(10분)을 늘리지 않는다.
 
 API 문서와 시험 화면은 `http://127.0.0.1:8000/docs`에서 볼 수 있다.
+
+## 마이그레이션 추가하는 법 (개발자용)
+
+1. `models.py`를 고친 뒤 `uv run python scripts/new_migration.py "설명"`을 실행한다(`alembic.ini` 없이 임시 DB로 초안을 `src/milkbank/migrations/versions/`에 만든다). 초안은 사람이 검토하고 `down_revision`과 번호를 확인한다.
+2. SQLite에서 열 변경 등은 표 재생성(batch)으로 처리된다. 외래 키가 걸린 표를 재생성해도 실패하지 않도록 `env.py`가 `milkbank.migrate.foreign_keys_off`로 감싸고 끝에 `foreign_key_check`를 한다. 테스트에서 직접 쓸 때는 `with foreign_keys_off(conn): ...` 안에서 마이그레이션 트랜잭션을 연다.
+3. enum 열의 CHECK 제약은 이름 없이 만들어지므로 재생성할 때 enum 이름(`name='recordkind'` 등)으로 이름을 붙여 준다.
+4. 시험은 `seeded_engine` 픽스처(직원·환자·재고 기록이 들어 있는 최신 DB)를 이전 버전으로 내린 뒤 올려서, 데이터가 있는 DB에서 새 마이그레이션이 되는지 확인한다. 모델과 마이그레이션이 같은지는 `tests/test_migrations.py`의 스키마 비교 테스트가 잡는다.
+5. 이미 배포된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다.
 
 ## DB 위치
 

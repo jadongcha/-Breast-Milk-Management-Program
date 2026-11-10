@@ -36,7 +36,12 @@ def parse_host(raw: str) -> str:
         host = ""
     if host and not _is_ip(host):
         labels = host.split(".")
-        if len(host) <= 253 and all(_LABEL.match(label) for label in labels):
+        # 마지막 조각이 숫자뿐이면 잘못 입력한 IP(192.168.0.256 등)로 본다.
+        if (
+            len(host) <= 253
+            and all(_LABEL.match(label) for label in labels)
+            and not labels[-1].isdigit()
+        ):
             return host
         host = ""
     if not host:
@@ -142,6 +147,8 @@ def setup_tls(
     if not 1 <= port <= 65535:
         raise TlsError("포트 번호가 올바르지 않습니다")
     hosts = [parse_host(h) for h in hosts]
+    if _is_ip(hosts[0]) and ipaddress.ip_address(hosts[0]).version == 6:
+        raise TlsError("첫 번째 서버 주소는 IPv4 주소나 이름이어야 합니다")
     tls_dir.mkdir(parents=True, exist_ok=True)
     key_path = tls_dir / "server.key"
     reused = key_path.exists() and not new_key

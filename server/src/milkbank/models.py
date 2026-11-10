@@ -147,3 +147,4 @@ class LoginAttempt(Base):
     username: Mapped[str] = mapped_column(primary_key=True)
     failed_count: Mapped[int] = mapped_column(default=0)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_failed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)

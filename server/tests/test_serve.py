@@ -43,5 +43,38 @@ def test_serve_runs_uvicorn_with_tls(tmp_path, monkeypatch, capsys):
     assert kwargs["port"] == 9443
     assert kwargs["ssl_certfile"] == str(tls_dir / "server.crt")
     assert kwargs["ssl_keyfile"] == str(tls_dir / "server.key")
+    assert kwargs["ssl_ciphers"] == "ECDHE+AESGCM:ECDHE+CHACHA20"
     assert f"서버 주소: {result.url}" in capsys.readouterr().out
     assert json.loads((tls_dir / "server.json").read_text(encoding="utf-8"))["port"] == 9443
+
+
+def test_serve_migrates_before_running(tmp_path, monkeypatch):
+    db_path = tmp_path / "m.db"
+    monkeypatch.setenv("MILKBANK_DB", str(db_path))
+    setup_tls(tmp_path / "tls", ["127.0.0.1"], 9443, False, NOW)
+    monkeypatch.setattr(serve.uvicorn, "run", lambda *a, **kw: None)
+    serve.main()
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(db_path)) as c:
+        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0001"
+
+
+def test_serve_legacy_db_exits(tmp_path, monkeypatch, capsys):
+    from milkbank.db import make_engine
+    from milkbank.models import Base
+
+    db_path = tmp_path / "m.db"
+    eng = make_engine(db_path)
+    Base.metadata.create_all(eng)
+    eng.dispose()
+    monkeypatch.setenv("MILKBANK_DB", str(db_path))
+    setup_tls(tmp_path / "tls", ["127.0.0.1"], 9443, False, NOW)
+    called = []
+    monkeypatch.setattr(serve.uvicorn, "run", lambda *a, **kw: called.append(1))
+    with pytest.raises(SystemExit) as e:
+        serve.main()
+    assert e.value.code == 1
+    assert "1단계 테스트용 DB는 지원하지 않습니다" in capsys.readouterr().err
+    assert not called
