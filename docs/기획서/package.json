@@ -1,0 +1,8 @@
+{
+  "name": "proposal-builder",
+  "private": true,
+  "description": "기획서 워드 파일 생성기 (node build.js)",
+  "dependencies": {
+    "docx": "^9.15.3"
+  }
+}
