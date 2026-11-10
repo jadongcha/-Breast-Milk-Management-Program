@@ -20,6 +20,7 @@ dev = ["pytest", "httpx"]
 
 [project.scripts]
 milkbank-create-admin = "milkbank.cli:main"
+milkbank-setup-tls = "milkbank.setup_tls:main"
 
 [build-system]
 requires = ["hatchling"]
