@@ -107,4 +107,13 @@
     <string name="local_network_permission_needed">"병원 서버에 연결하려면 '근처 기기(로컬 네트워크)' 권한이 필요합니다"</string>
     <string name="local_network_permission_request">권한 다시 요청</string>
     <string name="local_network_permission_settings">설정에서 권한 허용</string>
+    <string name="station_use_menu">이 기기를 제출처로 사용</string>
+    <string name="station_name_label">제출처 이름</string>
+    <string name="station_use_confirm">"이 기기를 '%1$s' 제출처로 바꿉니다. 이후 이 기기에서는 보호자 화면만 보입니다"</string>
+    <string name="stations_menu">제출처 관리</string>
+    <string name="stations_title">제출처 관리</string>
+    <string name="station_active">사용 중</string>
+    <string name="station_inactive">중지</string>
+    <string name="station_deactivate">사용 중지</string>
+    <string name="station_deactivate_confirm">"'%1$s' 제출처를 사용 중지합니다. 다시 켤 수 없고, 다시 쓰려면 새로 등록해야 합니다"</string>
 </resources>

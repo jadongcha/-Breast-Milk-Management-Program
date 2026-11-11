@@ -51,7 +51,12 @@ import app.milkbank.ui.MilkbankColors
 import app.milkbank.ui.Password
 import app.milkbank.ui.PatientDetail
 import app.milkbank.ui.PatientForm
+import app.milkbank.ui.GuardianHome
 import app.milkbank.ui.Staff
+import app.milkbank.ui.Stations
+import app.milkbank.ui.navigateClearingStack
+import app.milkbank.ui.station.StationSetupDialog
+import app.milkbank.ui.station.StationSetupViewModel
 import app.milkbank.ui.idleTouch
 
 private const val WIDE_DP = 840
@@ -100,6 +105,29 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
     val isAdmin = staff?.role == "admin"
     var selectedId by rememberSaveable { mutableStateOf<Int?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var setupOpen by rememberSaveable { mutableStateOf(false) }
+
+    // Not gated on isAdmin: the session ends during setup, and the dialog must stay to report Done.
+    if (setupOpen) {
+        val setupVm: StationSetupViewModel = viewModel(
+            factory = viewModelFactory {
+                initializer {
+                    StationSetupViewModel(
+                        { container.stations }, container.stationStore, container.session, unexpected,
+                        logUnexpected("station setup failed"),
+                    )
+                }
+            },
+        )
+        StationSetupDialog(
+            setupVm,
+            onDismiss = { setupOpen = false },
+            onDone = {
+                setupOpen = false
+                navController.navigateClearingStack(GuardianHome)
+            },
+        )
+    }
 
     Scaffold(
 
@@ -139,6 +167,16 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                                     modifier = Modifier.heightIn(min = 56.dp),
                                     text = { Text(stringResource(R.string.menu_admin_staff)) },
                                     onClick = { menuOpen = false; navController.navigate(Staff) },
+                                )
+                                DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
+                                    text = { Text(stringResource(R.string.stations_menu)) },
+                                    onClick = { menuOpen = false; navController.navigate(Stations) },
+                                )
+                                DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
+                                    text = { Text(stringResource(R.string.station_use_menu)) },
+                                    onClick = { menuOpen = false; setupOpen = true },
                                 )
                                 HorizontalDivider()
                             }

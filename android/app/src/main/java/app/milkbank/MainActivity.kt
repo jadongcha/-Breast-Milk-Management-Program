@@ -41,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.ui.AppNavHost
+import app.milkbank.ui.GuardianHome
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.LocalIdleTouch
 import app.milkbank.ui.Login
@@ -167,7 +168,8 @@ class MainActivity : ComponentActivity() {
         val backStackEntry by navController.currentBackStackEntryAsState()
         val destination = backStackEntry?.destination
         val routeIsPublic = destination == null ||
-            destination.hasRoute<Register>() || destination.hasRoute<Login>()
+            destination.hasRoute<Register>() || destination.hasRoute<Login>() ||
+            destination.hasRoute<GuardianHome>()
         LaunchedEffect(sessionState, routeIsPublic, current.config) {
             if (needsLoginRedirect(sessionState, current.config != null, routeIsPublic)) {
                 navController.navigateClearingStack(Login)

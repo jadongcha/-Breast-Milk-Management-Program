@@ -13,6 +13,8 @@ sealed interface Route
 @Serializable data class PatientDetail(val id: Int) : Route
 @Serializable data class PatientForm(val id: Int? = null) : Route
 @Serializable data object Staff : Route
+@Serializable data object Stations : Route
+@Serializable data object GuardianHome : Route
 
 /** True when a registered server has just been removed, so the app must go back to registration. */
 fun configClearedNeedsRegister(previous: ServerConfig?, current: ServerConfig?): Boolean =
