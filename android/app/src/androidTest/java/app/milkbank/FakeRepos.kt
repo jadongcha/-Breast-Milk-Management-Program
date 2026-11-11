@@ -1,5 +1,18 @@
 package app.milkbank
 
+import app.milkbank.api.BabyDto
+import app.milkbank.api.ConfirmResponse
+import app.milkbank.api.GuardianLoginResponse
+import app.milkbank.api.GuardianSubmitResponse
+import app.milkbank.api.PendingDto
+import app.milkbank.api.RejectResponse
+import app.milkbank.api.StationCreateResponse
+import app.milkbank.api.StationDto
+import app.milkbank.api.StationSelfDto
+import app.milkbank.data.GuardianRepository
+import app.milkbank.data.StationRepository
+import app.milkbank.data.SubmissionRepository
+import kotlinx.coroutines.Job
 import app.milkbank.api.LoginResponse
 import app.milkbank.api.PatientDetailDto
 import app.milkbank.api.PatientDto
@@ -105,9 +118,42 @@ class FakeStaff : StaffRepository {
         ApiResult.Err(ApiError(null, "unsupported in fake"))
 }
 
+private val unsupported = ApiError(null, "unsupported in fake")
+
+class FakeStations : StationRepository {
+    override suspend fun create(name: String): ApiResult<StationCreateResponse> = ApiResult.Err(unsupported)
+    override suspend fun list(): ApiResult<List<StationDto>> = ApiResult.Ok(emptyList())
+    override suspend fun deactivate(id: Int): ApiResult<StationDto> = ApiResult.Err(unsupported)
+    override suspend fun self(stationToken: String): ApiResult<StationSelfDto> = ApiResult.Err(unsupported)
+    override suspend fun releaseSelf(stationToken: String): ApiResult<Unit> = ApiResult.Ok(Unit)
+}
+
+class FakeGuardian : GuardianRepository {
+    override suspend fun login(stationToken: String, phone: String, babyId: String):
+        ApiResult<GuardianLoginResponse> = ApiResult.Err(unsupported)
+
+    override suspend fun babies(stationToken: String, guardianToken: String): ApiResult<List<BabyDto>> =
+        ApiResult.Err(unsupported)
+
+    override suspend fun submit(stationToken: String, guardianToken: String, patientId: Int, count: Int):
+        ApiResult<GuardianSubmitResponse> = ApiResult.Err(unsupported)
+
+    override fun logout(stationToken: String, guardianToken: String): Job = Job().apply { complete() }
+}
+
+class FakeSubmissions : SubmissionRepository {
+    override suspend fun pending(): ApiResult<List<PendingDto>> = ApiResult.Ok(emptyList())
+    override suspend fun confirm(id: Int, count: Int): ApiResult<ConfirmResponse> = ApiResult.Err(unsupported)
+    override suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse> =
+        ApiResult.Err(unsupported)
+}
+
 fun fakeRepositories(session: SessionManager, world: FakeWorld) = Repositories(
     auth = FakeAuth(session),
     patients = FakePatients(world),
     stock = FakeStock(world),
     staff = FakeStaff(),
+    stations = FakeStations(),
+    guardian = FakeGuardian(),
+    submissions = FakeSubmissions(),
 )

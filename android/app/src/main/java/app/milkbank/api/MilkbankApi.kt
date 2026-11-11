@@ -1,6 +1,7 @@
 package app.milkbank.api
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
@@ -32,4 +33,40 @@ interface MilkbankApi {
     @PATCH("staff/{id}")
     suspend fun setActive(@Path("id") id: Int, @Body body: StaffPatchRequest): StaffDto
     @POST("staff/{id}/reset-password") suspend fun resetPassword(@Path("id") id: Int): TempPasswordResponse
+
+    @GET("stations") suspend fun stations(): List<StationDto>
+    @POST("stations") suspend fun createStation(@Body body: StationCreateRequest): StationCreateResponse
+    @PATCH("stations/{id}")
+    suspend fun patchStation(@Path("id") id: Int, @Body body: StationPatchRequest): StationDto
+    @GET("station/self") suspend fun stationSelf(@Header("X-Station-Token") stationToken: String): StationSelfDto
+    /** Staff Bearer is added by the interceptor; the station token is explicit. */
+    @DELETE("station/self") suspend fun releaseStation(@Header("X-Station-Token") stationToken: String)
+
+    @POST("guardian/login")
+    suspend fun guardianLogin(
+        @Header("X-Station-Token") stationToken: String,
+        @Body body: GuardianLoginRequest,
+    ): GuardianLoginResponse
+    @GET("guardian/babies")
+    suspend fun guardianBabies(
+        @Header("X-Station-Token") stationToken: String,
+        @Header("Authorization") authorization: String,
+    ): List<BabyDto>
+    @POST("guardian/submissions")
+    suspend fun guardianSubmit(
+        @Header("X-Station-Token") stationToken: String,
+        @Header("Authorization") authorization: String,
+        @Body body: GuardianSubmitRequest,
+    ): GuardianSubmitResponse
+    @POST("guardian/logout")
+    suspend fun guardianLogout(
+        @Header("X-Station-Token") stationToken: String,
+        @Header("Authorization") authorization: String,
+    )
+
+    @GET("submissions") suspend fun submissions(@Query("status") status: String): List<PendingDto>
+    @POST("submissions/{id}/confirm")
+    suspend fun confirmSubmission(@Path("id") id: Int, @Body body: ConfirmRequest): ConfirmResponse
+    @POST("submissions/{id}/reject")
+    suspend fun rejectSubmission(@Path("id") id: Int, @Body body: RejectRequest): RejectResponse
 }

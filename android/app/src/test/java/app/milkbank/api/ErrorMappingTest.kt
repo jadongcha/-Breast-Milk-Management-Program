@@ -2,6 +2,9 @@ package app.milkbank.api
 
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
+import app.milkbank.core.isStationInvalid
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -50,5 +53,21 @@ class ErrorMappingTest {
     @Test(expected = kotlinx.coroutines.CancellationException::class)
     fun cancellationIsRethrown() {
         runBlocking { apiCall(net) { throw kotlinx.coroutines.CancellationException("c") } }
+    }
+
+    @Test
+    fun errorBodyCode_isParsed() = runBlocking {
+        val r = apiCall(net) {
+            throw http(401, """{"detail":"등록된 제출처 기기가 아닙니다","code":"station_invalid"}""")
+        } as ApiResult.Err
+        assertEquals("station_invalid", r.error.code)
+        assertTrue(r.error.isStationInvalid())
+    }
+
+    @Test
+    fun errorWithoutCode_isNotStationInvalid() = runBlocking {
+        val r = apiCall(net) { throw http(401, """{"detail":"세션이 끝났습니다"}""") } as ApiResult.Err
+        assertEquals(null, r.error.code)
+        assertFalse(r.error.isStationInvalid())
     }
 }

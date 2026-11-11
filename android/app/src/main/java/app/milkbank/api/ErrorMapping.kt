@@ -25,6 +25,17 @@ fun parseDetail(body: String?): String? {
     }
 }
 
+/** Extracts a string `code` from an error body, or null. */
+fun parseCode(body: String?): String? {
+    if (body.isNullOrBlank()) return null
+    return try {
+        val code = (errorJson.parseToJsonElement(body) as? JsonObject)?.get("code")
+        (code as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+    } catch (e: Exception) {
+        null
+    }
+}
+
 suspend fun <T> apiCall(networkErrorMessage: String, block: suspend () -> T): ApiResult<T> =
     try {
         ApiResult.Ok(block())
@@ -36,7 +47,7 @@ suspend fun <T> apiCall(networkErrorMessage: String, block: suspend () -> T): Ap
         } catch (_: Exception) {
             null
         }
-        ApiResult.Err(ApiError(e.code(), parseDetail(body) ?: networkErrorMessage))
+        ApiResult.Err(ApiError(e.code(), parseDetail(body) ?: networkErrorMessage, parseCode(body)))
     } catch (e: SerializationException) {
         ApiResult.Err(ApiError(null, networkErrorMessage))
     } catch (e: IllegalArgumentException) {

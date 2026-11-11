@@ -69,7 +69,7 @@ interface StaffRepository {
 }
 
 /** Runs [block] against [api], or returns the network error when no server is registered. */
-private suspend fun <T> MilkbankApi?.call(
+internal suspend fun <T> MilkbankApi?.call(
     msg: String,
     block: suspend (MilkbankApi) -> T,
 ): ApiResult<T> {

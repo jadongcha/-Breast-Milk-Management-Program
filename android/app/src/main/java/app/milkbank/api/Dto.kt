@@ -155,3 +155,106 @@ data class RecordRequest(
 
 @Serializable
 data class RecordResultDto(val record: RecordDto, val balance: Int)
+
+@Serializable
+data class StationCreateRequest(val name: String)
+
+@Serializable
+data class StationPatchRequest(val active: Boolean)
+
+@Serializable
+data class StationDto(
+    val id: Int,
+    val name: String,
+    val active: Boolean,
+    @SerialName("created_at")
+    @Serializable(with = InstantSerializer::class)
+    val createdAt: Instant,
+)
+
+@Serializable
+data class StationCreateResponse(
+    val station: StationDto,
+    @SerialName("station_token") val stationToken: String,
+)
+
+@Serializable
+data class StationSelfDto(val id: Int, val name: String)
+
+@Serializable
+data class GuardianLoginRequest(val phone: String, @SerialName("baby_id") val babyId: String)
+
+@Serializable
+data class BabyDto(
+    @SerialName("patient_id") val patientId: Int,
+    @SerialName("baby_id") val babyId: String,
+    val balance: Int,
+    @SerialName("pending_count") val pendingCount: Int,
+)
+
+@Serializable
+data class GuardianLoginResponse(val token: String, val babies: List<BabyDto>)
+
+@Serializable
+data class GuardianSubmitRequest(@SerialName("patient_id") val patientId: Int, val count: Int)
+
+@Serializable
+data class SubmissionBriefDto(
+    val id: Int,
+    val count: Int,
+    @SerialName("submitted_at")
+    @Serializable(with = InstantSerializer::class)
+    val submittedAt: Instant,
+)
+
+@Serializable
+data class GuardianSubmitResponse(
+    val submission: SubmissionBriefDto,
+    val balance: Int,
+    @SerialName("pending_count") val pendingCount: Int,
+)
+
+@Serializable
+data class PendingDto(
+    val id: Int,
+    @SerialName("patient_id") val patientId: Int,
+    @SerialName("baby_id") val babyId: String,
+    val balance: Int,
+    @SerialName("station_name") val stationName: String,
+    @SerialName("submitted_at")
+    @Serializable(with = InstantSerializer::class)
+    val submittedAt: Instant,
+    val count: Int,
+    val discharged: Boolean,
+)
+
+/** status is "pending", "confirmed" or "rejected". */
+@Serializable
+data class SubmissionDto(
+    val id: Int,
+    @SerialName("patient_id") val patientId: Int,
+    val count: Int,
+    @SerialName("submitted_at")
+    @Serializable(with = InstantSerializer::class)
+    val submittedAt: Instant,
+    val status: String,
+    @SerialName("confirmed_count") val confirmedCount: Int? = null,
+    @SerialName("handled_by") val handledBy: Int? = null,
+    @SerialName("handled_at")
+    @Serializable(with = InstantSerializer::class)
+    val handledAt: Instant? = null,
+    @SerialName("reject_reason") val rejectReason: String? = null,
+    val memo: String? = null,
+)
+
+@Serializable
+data class ConfirmRequest(val count: Int)
+
+@Serializable
+data class ConfirmResponse(val record: RecordDto, val balance: Int, val submission: SubmissionDto)
+
+@Serializable
+data class RejectRequest(val reason: String, val memo: String? = null)
+
+@Serializable
+data class RejectResponse(val submission: SubmissionDto)

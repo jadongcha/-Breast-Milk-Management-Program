@@ -38,6 +38,7 @@ object HttpClientFactory {
                 HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
                     redactHeader("Authorization")
+                    redactHeader("X-Station-Token")
                 },
             )
         }

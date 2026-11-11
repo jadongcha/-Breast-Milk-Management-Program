@@ -16,6 +16,12 @@ import app.milkbank.data.HttpStockRepository
 import app.milkbank.data.PatientRepository
 import app.milkbank.data.StaffRepository
 import app.milkbank.data.StockRepository
+import app.milkbank.data.GuardianRepository
+import app.milkbank.data.HttpGuardianRepository
+import app.milkbank.data.HttpStationRepository
+import app.milkbank.data.HttpSubmissionRepository
+import app.milkbank.data.StationRepository
+import app.milkbank.data.SubmissionRepository
 import app.milkbank.data.shutdownQuietly
 import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
@@ -44,6 +50,9 @@ class Repositories(
     val patients: PatientRepository,
     val stock: StockRepository,
     val staff: StaffRepository,
+    val stations: StationRepository,
+    val guardian: GuardianRepository,
+    val submissions: SubmissionRepository,
 )
 
 /** Manual DI. Repositories are rebuilt whenever the registered server changes. */
@@ -99,6 +108,9 @@ class AppContainer(context: Context) {
     val patients: PatientRepository get() = _repositories.value.patients
     val stock: StockRepository get() = _repositories.value.stock
     val staff: StaffRepository get() = _repositories.value.staff
+    val stations: StationRepository get() = _repositories.value.stations
+    val guardian: GuardianRepository get() = _repositories.value.guardian
+    val submissions: SubmissionRepository get() = _repositories.value.submissions
 
     /** Replaces the repositories with fakes and stops following config changes. */
     @VisibleForTesting
@@ -120,5 +132,8 @@ class AppContainer(context: Context) {
         patients = HttpPatientRepository(api, networkError),
         stock = HttpStockRepository(api, networkError),
         staff = HttpStaffRepository(api, networkError),
+        stations = HttpStationRepository(api, networkError),
+        guardian = HttpGuardianRepository(api, networkError, appScope = scope),
+        submissions = HttpSubmissionRepository(api, networkError),
     )
 }
