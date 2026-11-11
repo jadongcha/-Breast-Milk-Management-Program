@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .api import auth, patients, staff, stock
+from .api import auth, patients, staff, stations, stock
 from .clock import Clock, SystemClock
 from .config import Config, load_config
 from .db import make_engine, make_session_factory
@@ -21,7 +21,10 @@ def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
 
     @app.exception_handler(DomainError)
     async def _domain_error(_: Request, e: DomainError):
-        return JSONResponse(status_code=e.status_code, content={"detail": e.message})
+        content = {"detail": e.message}
+        if e.code:
+            content["code"] = e.code
+        return JSONResponse(status_code=e.status_code, content=content)
 
     @app.get("/health")
     def health():
@@ -31,6 +34,7 @@ def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
     app.include_router(staff.router)
     app.include_router(patients.router)
     app.include_router(stock.router)
+    app.include_router(stations.router)
     return app
 
 

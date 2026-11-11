@@ -10,6 +10,11 @@ class Config:
     cancel_window_minutes: int = 10
     login_lock_threshold: int = 5
     login_lock_minutes: int = 10
+    station_lock_threshold: int = 20
+    station_lock_window_minutes: int = 10
+    station_lock_minutes: int = 10
+    guardian_idle_seconds: int = 60
+    pending_limit: int = 5
 
     @property
     def tls_dir(self) -> Path:

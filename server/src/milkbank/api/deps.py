@@ -5,10 +5,11 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from .. import staff as staff_service
+from .. import stations as station_service
 from ..clock import Clock
 from ..config import Config
 from ..errors import Forbidden
-from ..models import Role, Staff
+from ..models import Role, Staff, Station
 
 
 def get_db(request: Request) -> Iterator[Session]:
@@ -80,3 +81,10 @@ def require_admin(staff: Annotated[Staff, Depends(current_staff)]) -> Staff:
     if staff.role != Role.ADMIN:
         raise Forbidden("관리자만 사용할 수 있습니다")
     return staff
+
+
+def current_station(request: Request, db: DbDep) -> Station:
+    return station_service.authenticate_station(db, request.headers.get("X-Station-Token"))
+
+
+StationDep = Annotated[Station, Depends(current_station)]

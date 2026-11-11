@@ -116,7 +116,8 @@ def test_nurse_cancel_window_message_and_config(client, admin_token, nurse_token
 
 def _protected_routes(app):
     # 이 FastAPI 버전은 라우터를 지연 포함하므로 app.routes 대신 OpenAPI 스키마로 라우트를 찾는다.
-    public = {("POST", "/auth/login"), ("GET", "/health")}
+    # GET /station/self는 직원이 아니라 제출처 토큰으로 지킨다(test_stations.py).
+    public = {("POST", "/auth/login"), ("GET", "/health"), ("GET", "/station/self")}
     out = []
     for path, ops in app.openapi()["paths"].items():
         for method in ops:
@@ -131,8 +132,11 @@ _ANY_STAFF = {("POST", "/auth/logout"), ("POST", "/auth/password"), ("GET", "/au
 
 
 def _is_admin_only(method, path):
-    return path.startswith("/staff") or (path == "/patients" and method == "POST") or (
-        path.startswith("/patients/") and method == "PATCH"
+    return (
+        path.startswith(("/staff", "/stations"))
+        or path == "/station/self"
+        or (path == "/patients" and method == "POST")
+        or (path.startswith("/patients/") and method == "PATCH")
     )
 
 

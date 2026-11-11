@@ -124,3 +124,32 @@ class RecordResult(BaseModel):
 
 class PatientDetail(PatientOut):
     records: list[RecordOut]
+
+
+class StationCreateIn(BaseModel):
+    name: str
+
+
+class StationPatchIn(BaseModel):
+    active: bool
+
+
+class StationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    active: bool
+    created_at: datetime
+
+
+class StationCreateOut(BaseModel):
+    station: StationOut
+    station_token: str
+
+
+class StationSelfOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str

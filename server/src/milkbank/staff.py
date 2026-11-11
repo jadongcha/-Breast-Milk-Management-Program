@@ -5,8 +5,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from . import lockout
 from .clock import Clock
-from .errors import BadRequest, Conflict, NotFound, TooManyRequests, Unauthorized
+from .errors import BadRequest, Conflict, NotFound, Unauthorized
 from .models import AuthSession, LoginAttempt, Role, Staff
 from .security import (
     check_password_policy,
@@ -71,12 +72,13 @@ def login(
         raise Unauthorized(_BAD_LOGIN)
     too_long = len(password) > MAX_PASSWORD_LEN
     now = clock.now()
-    attempt = db.get(LoginAttempt, key)
-    if attempt is not None and attempt.locked_until is not None and now < attempt.locked_until:
-        raise TooManyRequests(
-            f"로그인을 {lock_threshold}번 실패해 {lock_minutes}분 동안 잠겼습니다. "
-            "잠시 후 다시 시도해 주세요"
-        )
+    lockout.ensure_not_locked(
+        db,
+        key,
+        now,
+        f"로그인을 {lock_threshold}번 실패해 {lock_minutes}분 동안 잠겼습니다. "
+        "잠시 후 다시 시도해 주세요",
+    )
     staff = db.scalar(select(Staff).where(Staff.username == key))
     if staff is None and not too_long:
         verify_password(_DUMMY_HASH, password)
@@ -86,22 +88,11 @@ def login(
         or too_long  # 너무 긴 비밀번호는 해시하지 않고 실패로 센다
         or not verify_password(staff.password_hash, password)
     ):
-        if attempt is None:
-            attempt = LoginAttempt(username=key, failed_count=1)
-            db.add(attempt)
-        elif attempt.locked_until is not None:
-            # 잠금이 끝난 기록: 새로 센다.
-            attempt.failed_count = 1
-            attempt.locked_until = None
-        else:
-            attempt.failed_count += 1
-        attempt.last_failed_at = now
-        if attempt.failed_count >= lock_threshold:
-            attempt.locked_until = now + timedelta(minutes=lock_minutes)
-            attempt.failed_count = 0
-        db.flush()
+        lockout.record_failure(
+            db, key, now, threshold=lock_threshold, lock_minutes=lock_minutes
+        )
         raise Unauthorized(_BAD_LOGIN)
-    db.execute(delete(LoginAttempt).where(LoginAttempt.username == key))
+    lockout.clear(db, key)
     raw, hashed = new_token()
     db.add(AuthSession(token_hash=hashed, staff_id=staff.id, created_at=now, last_seen_at=now))
     db.flush()
