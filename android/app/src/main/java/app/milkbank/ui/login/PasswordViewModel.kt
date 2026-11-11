@@ -26,6 +26,7 @@ class PasswordViewModel(
     private val session: SessionManager,
     private val mismatchMessage: String,
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(PasswordState())
     val state: StateFlow<PasswordState> = _state.asStateFlow()
@@ -59,6 +60,7 @@ class PasswordViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _state.update { it.copy(loading = false, error = unexpectedError) }
             }
         }

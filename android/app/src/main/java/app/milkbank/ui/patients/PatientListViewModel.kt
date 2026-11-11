@@ -19,6 +19,7 @@ class PatientListViewModel(
     banner: ResultBannerStore,
     private val debounceMs: Long = 250,
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _patients = MutableStateFlow<List<PatientDto>>(emptyList())
     val patients: StateFlow<List<PatientDto>> = _patients.asStateFlow()
@@ -85,6 +86,7 @@ class PatientListViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _loading.value = false

@@ -29,6 +29,7 @@ class RegisterViewModel(
     private val currentConfig: suspend () -> ServerConfig?,
     private val save: suspend (ServerConfig) -> Unit,
     private val endSession: () -> Unit,
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow<RegisterState>(RegisterState.Scanning)
     val state: StateFlow<RegisterState> = _state.asStateFlow()
@@ -60,6 +61,7 @@ class RegisterViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 RegisterState.Error(R.string.register_save_failed)
             }
         }
@@ -76,6 +78,7 @@ class RegisterViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 RegisterState.Error(R.string.register_save_failed)
             }
         }

@@ -52,6 +52,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                             currentConfig = { container.serverConfigStore.config.first() },
                             save = { container.serverConfigStore.save(it) },
                             endSession = { container.session.end(LogoutReason.USER) },
+                            onError = logUnexpected("register failed"),
                         )
                     }
                 },
@@ -63,7 +64,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val unexpected = stringResource(R.string.network_error)
             val vm: LoginViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { LoginViewModel(container.auth, container.session, unexpected) }
+                    initializer { LoginViewModel(container.auth, container.session, unexpected, logUnexpected("login failed")) }
                 },
             )
             LoginScreen(
@@ -81,7 +82,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             }
             val vm: PasswordViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { PasswordViewModel(container.auth, container.session, mismatch, unexpected) }
+                    initializer { PasswordViewModel(container.auth, container.session, mismatch, unexpected, logUnexpected("password change failed")) }
                 },
             )
             PasswordScreen(
@@ -107,7 +108,10 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 key = "patient-form-$id",
                 factory = viewModelFactory {
                     initializer {
-                        PatientFormViewModel(id, { container.patients }, container.resultBanner, SystemClock, unexpected)
+                        PatientFormViewModel(
+                            id, { container.patients }, container.resultBanner, SystemClock, unexpected,
+                            logUnexpected("patient form failed"),
+                        )
                     }
                 },
             )
@@ -122,7 +126,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
             val unexpected = stringResource(R.string.network_error)
             val vm: StaffViewModel = viewModel(
-                factory = viewModelFactory { initializer { StaffViewModel({ container.staff }, unexpected) } },
+                factory = viewModelFactory { initializer { StaffViewModel({ container.staff }, unexpected, logUnexpected("staff action failed")) } },
             )
             StaffScreen(vm, onBack = { navController.popBackStack() })
         }

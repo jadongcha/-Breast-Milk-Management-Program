@@ -32,6 +32,8 @@ class RegisterViewModelTest {
 
     private var saveThrows = false
 
+    private val reported = mutableListOf<Throwable>()
+
     private fun vm(current: ServerConfig? = null) = RegisterViewModel(
         health = {
             healthCalls++
@@ -40,6 +42,7 @@ class RegisterViewModelTest {
         currentConfig = { current },
         save = { if (saveThrows) throw java.io.IOException("disk"); saved = it },
         endSession = { sessionEnds++ },
+        onError = { reported += it },
     )
 
     @Test fun notQr_isError() {
@@ -135,5 +138,21 @@ class RegisterViewModelTest {
         assertEquals(RegisterState.Scanning, v.state.value)
         assertNull(saved)
         assertEquals(0, sessionEnds)
+    }
+
+    @Test fun saveThrows_reportsExceptionToOnError() {
+        saveThrows = true
+        val v = vm()
+        v.onScanned(qr("https://a:1", pinA))
+        assertEquals(1, reported.size)
+        assertTrue(reported[0] is java.io.IOException)
+    }
+
+    @Test fun confirmSaveThrows_reportsExceptionToOnError() {
+        saveThrows = true
+        val v = vm(ServerConfig("https://a:1", pinA))
+        v.onScanned(qr("https://b:2", pinB))
+        v.confirmDifferentServer()
+        assertEquals(1, reported.size)
     }
 }

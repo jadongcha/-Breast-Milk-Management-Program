@@ -34,6 +34,7 @@ class PatientDetailViewModel(
     private val clock: Clock,
     private val savedMessage: String = "",
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _detail = MutableStateFlow<PatientDetailDto?>(null)
     val detail: StateFlow<PatientDetailDto?> = _detail.asStateFlow()
@@ -69,6 +70,7 @@ class PatientDetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             }
         }
@@ -124,6 +126,7 @@ class PatientDetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _pending.value = null
@@ -157,6 +160,7 @@ class PatientDetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _pendingCancel.value = null

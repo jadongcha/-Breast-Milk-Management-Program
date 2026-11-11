@@ -21,6 +21,10 @@ import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 interface AuthRepository {
@@ -69,6 +73,8 @@ class HttpAuthRepository(
     private val session: SessionManager,
     private val networkError: String,
     private val healthApiFactory: ((ServerConfig) -> MilkbankApi)? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val cleanup: (OkHttpClient?) -> Unit = { it?.shutdownQuietly() },
 ) : AuthRepository {
     override suspend fun login(username: String, password: String): ApiResult<LoginResponse> {
         val r = api.call(networkError) { it.login(LoginRequest(username, password)) }
@@ -95,14 +101,19 @@ class HttpAuthRepository(
         try {
             return apiCall(networkError) { temp.health() }
         } finally {
-            client?.let {
-                it.dispatcher.executorService.shutdown()
-                it.connectionPool.evictAll()
-            }
+            // Closing pooled TLS sockets writes to the network: never on the caller's (Main) thread,
+            // and not skippable by cancellation.
+            withContext(NonCancellable + ioDispatcher) { cleanup(client) }
         }
     }
 
     override suspend fun ping(): Boolean = api.call(networkError) { it.health() } is ApiResult.Ok
+}
+
+/** Stops the client's executor and closes pooled sockets. Blocking I/O: call off the main thread. */
+fun OkHttpClient.shutdownQuietly() {
+    dispatcher.executorService.shutdown()
+    connectionPool.evictAll()
 }
 
 private fun pinnedApi(config: ServerConfig): Pair<MilkbankApi, OkHttpClient> {

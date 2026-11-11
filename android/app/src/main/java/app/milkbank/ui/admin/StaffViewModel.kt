@@ -29,6 +29,7 @@ private val ROLES = setOf("admin", "nurse")
 class StaffViewModel(
     private val repo: () -> StaffRepository,
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _list = MutableStateFlow<List<StaffDto>>(emptyList())
     val list: StateFlow<List<StaffDto>> = _list.asStateFlow()
@@ -56,6 +57,7 @@ class StaffViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             }
         }
@@ -90,6 +92,7 @@ class StaffViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _submitting.value = false
@@ -134,6 +137,7 @@ class StaffViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _pending.value = null

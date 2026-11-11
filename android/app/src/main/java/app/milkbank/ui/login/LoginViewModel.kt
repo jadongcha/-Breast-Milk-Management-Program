@@ -29,6 +29,7 @@ class LoginViewModel(
     private val auth: AuthRepository,
     private val session: SessionManager,
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(LoginState())
     val state: StateFlow<LoginState> = _state.asStateFlow()
@@ -57,6 +58,7 @@ class LoginViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _state.update { it.copy(loading = false, password = "", error = unexpectedError) }
             }
         }

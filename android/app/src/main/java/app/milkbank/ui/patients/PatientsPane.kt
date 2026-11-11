@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavHostController
 import app.milkbank.AppContainer
 import app.milkbank.R
+import app.milkbank.ui.logUnexpected
 import app.milkbank.core.SystemClock
 import app.milkbank.session.LogoutReason
 import app.milkbank.ui.MilkbankColors
@@ -72,6 +73,7 @@ fun rememberDetailViewModel(container: AppContainer, id: Int): PatientDetailView
                     clock = SystemClock,
                     savedMessage = saved,
                     unexpectedError = unexpected,
+                    onError = logUnexpected("patient detail action failed"),
                 )
             }
         },
@@ -86,7 +88,8 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
     val listVm: PatientListViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                PatientListViewModel({ container.patients }, container.resultBanner, unexpectedError = unexpected)
+                PatientListViewModel({ container.patients }, container.resultBanner, unexpectedError = unexpected,
+                    onError = logUnexpected("patient list failed"))
             }
         },
     )

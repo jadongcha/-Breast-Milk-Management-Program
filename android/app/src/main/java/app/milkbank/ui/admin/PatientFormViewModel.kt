@@ -38,6 +38,7 @@ class PatientFormViewModel(
     private val banner: ResultBannerStore,
     clock: Clock,
     private val unexpectedError: String = "",
+    private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _form = MutableStateFlow(
         PatientFormState(admittedOn = clock.now().atZone(SEOUL).toLocalDate().toString()),
@@ -74,6 +75,7 @@ class PatientFormViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _loading.value = false
@@ -116,6 +118,7 @@ class PatientFormViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onError(e)
                 _error.value = unexpectedError
             } finally {
                 _submitting.value = false

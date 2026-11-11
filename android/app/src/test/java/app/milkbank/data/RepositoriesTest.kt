@@ -11,6 +11,7 @@ import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -240,5 +241,38 @@ class RepositoriesTest {
         server.enqueue(MockResponse().setResponseCode(503))
         assertEquals(false, auth().ping())
         assertEquals(false, HttpAuthRepository(null, session, net).ping())
+    }
+
+    @Test
+    fun healthCleanupRunsOnInjectedDispatcherNotCaller() {
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "fake-io") }
+        val cleanupThreads = java.util.Collections.synchronizedList(mutableListOf<Thread>())
+        try {
+            server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+            val repo = HttpAuthRepository(
+                api, session, net,
+                healthApiFactory = { api },
+                ioDispatcher = executor.asCoroutineDispatcher(),
+                cleanup = { cleanupThreads += Thread.currentThread() },
+            )
+            val caller = Thread.currentThread()
+            val r = runBlocking { repo.health(ServerConfig("https://x", "p")) }
+            assertEquals(ApiResult.Ok(Unit), r)
+            assertEquals(1, cleanupThreads.size)
+            assertEquals("fake-io", cleanupThreads[0].name)
+            assertTrue(cleanupThreads[0] !== caller)
+        } finally {
+            executor.shutdown()
+        }
+    }
+
+    @Test
+    fun healthCleanupRunsEvenOnFailure() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        server.enqueue(MockResponse().setResponseCode(503))
+        val repo = HttpAuthRepository(api, session, net, healthApiFactory = { api }, cleanup = { calls.incrementAndGet() })
+        val r = runBlocking { repo.health(ServerConfig("https://x", "p")) }
+        assertEquals(503, (r as ApiResult.Err).error.status)
+        assertEquals(1, calls.get())
     }
 }

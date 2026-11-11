@@ -16,6 +16,7 @@ import app.milkbank.data.HttpStockRepository
 import app.milkbank.data.PatientRepository
 import app.milkbank.data.StaffRepository
 import app.milkbank.data.StockRepository
+import app.milkbank.data.shutdownQuietly
 import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.server.ServerConfigStore
@@ -90,10 +91,8 @@ class AppContainer(context: Context) {
         _repositories.value = build(api)
         // Non-null only once an api exists; a change makes the monitor probe again at once.
         _serverKey.value = if (config != null) _repositories.value else null
-        oldClient?.let {
-            it.dispatcher.executorService.shutdown()
-            it.connectionPool.evictAll()
-        }
+        // Closing pooled sockets is blocking network I/O: keep it off whichever thread applied the config.
+        oldClient?.let { scope.launch(Dispatchers.IO) { it.shutdownQuietly() } }
     }
 
     val auth: AuthRepository get() = _repositories.value.auth
