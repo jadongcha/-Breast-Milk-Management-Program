@@ -72,7 +72,7 @@ API 문서와 시험 화면은 `http://127.0.0.1:8000/docs`에서 볼 수 있다
 ## 마이그레이션 추가하는 법 (개발자용)
 
 1. `models.py`를 고친 뒤 `uv run python scripts/new_migration.py "설명"`을 실행한다(`alembic.ini` 없이 임시 DB로 초안을 `src/milkbank/migrations/versions/`에 만든다). 초안은 사람이 검토하고 `down_revision`과 번호를 확인한다.
-2. SQLite에서 열 변경 등은 표 재생성(batch)으로 처리된다. 외래 키가 걸린 표를 재생성해도 실패하지 않도록 `env.py`가 `milkbank.migrate.foreign_keys_off`로 감싸고 끝에 `foreign_key_check`를 한다. 테스트에서 직접 쓸 때는 `with foreign_keys_off(conn): ...` 안에서 마이그레이션 트랜잭션을 연다.
+2. SQLite에서 열 변경 등은 표 재생성(batch)으로 처리된다. 외래 키가 걸린 표를 재생성해도 실패하지 않도록 `env.py`가 `milkbank.migrate.foreign_keys_off`로 감싸고, 마이그레이션마다 한 트랜잭션(DDL+버전 기록)으로 실행하며 버전 기록 직후 `foreign_key_check`를 한다. 깨지면 그 마이그레이션이 통째로 되돌려진다. 테스트에서 직접 쓸 때는 `with foreign_keys_off(conn): ...` 안에서 마이그레이션 트랜잭션을 연다.
 3. enum 열의 CHECK 제약은 이름 없이 만들어지므로 재생성할 때 enum 이름(`name='recordkind'` 등)으로 이름을 붙여 준다.
 4. 시험은 `seeded_engine` 픽스처(직원·환자·재고 기록이 들어 있는 최신 DB)를 이전 버전으로 내린 뒤 올려서, 데이터가 있는 DB에서 새 마이그레이션이 되는지 확인한다. 모델과 마이그레이션이 같은지는 `tests/test_migrations.py`의 스키마 비교 테스트가 잡는다.
 5. 이미 배포된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다.

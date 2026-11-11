@@ -54,9 +54,12 @@ def foreign_keys_off(connection: Connection) -> Iterator[None]:
         driver.execute("PRAGMA foreign_keys=ON")
 
 
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
 def _alembic_config(connection: Connection) -> AlembicConfig:
     cfg = AlembicConfig()
-    cfg.set_main_option("script_location", str(Path(__file__).parent / "migrations"))
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
     cfg.attributes["connection"] = connection
     return cfg
 
