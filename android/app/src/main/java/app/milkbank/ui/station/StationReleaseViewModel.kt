@@ -6,13 +6,14 @@ import app.milkbank.core.ApiResult
 import app.milkbank.core.isStationInvalid
 import app.milkbank.data.AuthRepository
 import app.milkbank.data.StationRepository
-import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import app.milkbank.station.GuardianIdle
 import app.milkbank.station.StationStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 sealed interface ReleaseState {
@@ -20,6 +21,9 @@ sealed interface ReleaseState {
     data object Ready : ReleaseState
     data object Releasing : ReleaseState
     data object Done : ReleaseState
+
+    /** Closed by the idle timeout while signed in; the admin session is already ended. */
+    data object TimedOut : ReleaseState
     data class Error(val message: String) : ReleaseState
 }
 
@@ -32,6 +36,7 @@ class StationReleaseViewModel(
     private val stations: () -> StationRepository,
     private val store: StationStore,
     private val session: SessionManager,
+    private val idle: GuardianIdle,
     private val adminOnlyMessage: String,
     private val offlineMessage: String,
     private val unexpectedError: String,
@@ -43,6 +48,19 @@ class StationReleaseViewModel(
     init {
         // A new dialog always starts at the login step: a staff session left over from an earlier dialog is ended.
         if (session.state.value != null) auth().logout()
+        // Signed in (ready or retrying after an error) and untouched for the idle limit: close the dialog.
+        viewModelScope.launch {
+            _state.collect { if (it == ReleaseState.Ready || it is ReleaseState.Error) idle.arm() else idle.disarm() }
+        }
+        viewModelScope.launch {
+            idle.expired.drop(1).collect {
+                val cur = _state.value
+                if (cur == ReleaseState.Ready || cur is ReleaseState.Error) {
+                    _state.value = ReleaseState.TimedOut
+                    if (session.state.value != null) auth().logout()
+                }
+            }
+        }
         // The admin session can end under us (idle logout, expired token): sign in again.
         viewModelScope.launch {
             session.state.collect { s ->
@@ -102,8 +120,8 @@ class StationReleaseViewModel(
                 if (cleared) {
                     store.clear()
                     // A 401 may already have ended the staff session as EXPIRED; either way the user is
-                    // going to the login screen without a "log in again" notice.
-                    session.end(LogoutReason.USER)
+                    // going to the login screen without a "log in again" notice. The server hears of the logout too.
+                    auth().logout()
                     session.consumeLogoutReason()
                     _state.value = ReleaseState.Done
                 } else {
@@ -118,6 +136,11 @@ class StationReleaseViewModel(
             }
         }
     }
+
+    /** Touch and clock tick from the dialog: the idle timer is this ViewModel's own, not the guardian's. */
+    fun touch() = idle.touch()
+
+    fun checkIdle() = idle.check()
 
     /** The admin session never outlives the dialog, even if the screen is torn down without a cancel. */
     override fun onCleared() {

@@ -16,6 +16,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,9 +31,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
 import app.milkbank.ui.IdleAwareDialog
+import app.milkbank.ui.LocalIdleTouch
 import app.milkbank.ui.components.IdleTextField
 
 private val MinButton = Modifier.heightIn(min = 56.dp)
@@ -49,11 +53,25 @@ fun StationReleaseDialog(
     var password by remember { mutableStateOf("") }
     if (state == ReleaseState.Done) return
 
+    // The dialog's own idle timer (signed in and untouched for a minute closes it): feed it touches and ticks.
+    LaunchedEffect(viewModel) {
+        while (true) {
+            viewModel.checkIdle()
+            delay(1000)
+        }
+    }
+    if (state == ReleaseState.TimedOut) {
+        LaunchedEffect(Unit) { onClose() }
+        return
+    }
+
     val busy = state == ReleaseState.Releasing || (state as? ReleaseState.Login)?.loading == true
     val close = {
         viewModel.cancel()
         onClose()
     }
+    val outerTouch = LocalIdleTouch.current
+    CompositionLocalProvider(LocalIdleTouch provides { outerTouch(); viewModel.touch() }) {
     IdleAwareDialog(
         onDismissRequest = { if (!busy) close() },
         properties = DialogProperties(dismissOnClickOutside = false),
@@ -124,5 +142,6 @@ fun StationReleaseDialog(
                 }
             }
         }
+    }
     }
 }

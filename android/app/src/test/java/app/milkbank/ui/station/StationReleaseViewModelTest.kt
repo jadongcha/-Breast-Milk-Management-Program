@@ -11,10 +11,12 @@ import app.milkbank.api.StationSelfDto
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
+import app.milkbank.core.FakeClock
 import app.milkbank.data.AuthRepository
 import app.milkbank.data.StationRepository
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import app.milkbank.station.GuardianIdle
 import app.milkbank.station.StationConfig
 import app.milkbank.station.StationStore
 import app.milkbank.station.TokenCipher
@@ -37,6 +39,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.time.Duration
 import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -65,6 +68,8 @@ class StationReleaseViewModelTest {
     private val fakeAuth = FakeAuthRepository()
     private val session = SessionManager(object : Clock { override fun now(): Instant = Instant.EPOCH })
     private lateinit var store: StationStore
+    private val idleClock = FakeClock(Instant.parse("2026-11-12T00:00:00Z"))
+    private val idle = GuardianIdle(idleClock)
 
     // Like the real repository: logout ends the local session at once.
     private val auth: AuthRepository = object : AuthRepository by fakeAuth {
@@ -89,7 +94,7 @@ class StationReleaseViewModelTest {
     }
 
     private fun vm() = StationReleaseViewModel(
-        { auth }, { stations }, store, session,
+        { auth }, { stations }, store, session, idle,
         adminOnlyMessage = "관리자만 해제할 수 있습니다",
         offlineMessage = "서버에 연결된 뒤 다시 시도해 주세요",
         unexpectedError = "서버에 연결할 수 없습니다",
@@ -229,6 +234,37 @@ class StationReleaseViewModelTest {
         assertEquals(ReleaseState.Login(), vm.state.value)
         assertEquals(1, stations.releaseCalls)
         assertEquals(station, store.config.first())
+    }
+
+    @Test fun signedInIdle60s_timesOutAndLogsOutAdmin() = runBlocking {
+        val vm = readyVm()
+        idleClock.advance(Duration.ofSeconds(59))
+        vm.checkIdle()
+        assertEquals(ReleaseState.Ready, vm.state.value)
+        vm.touch()
+        idleClock.advance(Duration.ofSeconds(59))
+        vm.checkIdle()
+        assertEquals(ReleaseState.Ready, vm.state.value) // touch restarted the count
+        idleClock.advance(Duration.ofSeconds(1))
+        vm.checkIdle()
+        assertEquals(ReleaseState.TimedOut, vm.state.value)
+        assertEquals(1, fakeAuth.logoutCalls)
+        assertNull(session.state.value)
+        assertEquals(station, store.config.first())
+    }
+
+    @Test fun loginStepIdle_doesNotTimeOut() {
+        val vm = vm()
+        idleClock.advance(Duration.ofMinutes(5))
+        vm.checkIdle()
+        assertEquals(ReleaseState.Login(), vm.state.value)
+    }
+
+    @Test fun release_ok_logsOutThroughRepository() = runBlocking {
+        val vm = readyVm()
+        vm.release("tok-1", stationInvalid = false)
+        vm.awaitSettled()
+        assertEquals(1, fakeAuth.logoutCalls)
     }
 
     @Test fun dismissInReady_logsOutAdmin() = runBlocking {

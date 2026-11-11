@@ -10,7 +10,10 @@ import app.milkbank.api.StationSelfDto
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
+import app.milkbank.data.AuthRepository
 import app.milkbank.data.StationRepository
+import app.milkbank.session.LogoutReason
+import app.milkbank.ui.login.FakeAuthRepository
 import app.milkbank.session.SessionManager
 import app.milkbank.station.StationConfig
 import app.milkbank.station.StationStore
@@ -62,6 +65,10 @@ class StationSetupViewModelTest {
     }
 
     private val repo = FakeStations()
+    private val fakeAuth = FakeAuthRepository()
+    private val auth: AuthRepository = object : AuthRepository by fakeAuth {
+        override fun logout() = fakeAuth.logout().also { session.end(LogoutReason.USER) }
+    }
     private lateinit var store: StationStore
     private val session = SessionManager(object : Clock { override fun now(): Instant = Instant.EPOCH })
 
@@ -78,7 +85,7 @@ class StationSetupViewModelTest {
         scope.cancel()
     }
 
-    private fun vm() = StationSetupViewModel({ repo }, store, session, "서버에 연결할 수 없습니다")
+    private fun vm() = StationSetupViewModel({ repo }, { auth }, store, session, "서버에 연결할 수 없습니다")
 
     private suspend fun StationSetupViewModel.awaitSettled() =
         withTimeout(5000) { state.first { it !is SetupState.Submitting } }
@@ -103,6 +110,7 @@ class StationSetupViewModelTest {
         withTimeout(5000) { ended.await() }
         job.cancel()
         assertEquals(StationConfig("tok-1", "신생아실 A"), savedAtEnd)
+        assertEquals(1, fakeAuth.logoutCalls) // through the repository, so the server is told too
         assertEquals(StationConfig("tok-1", "신생아실 A"), store.config.first())
         assertNull(session.state.value)
     }

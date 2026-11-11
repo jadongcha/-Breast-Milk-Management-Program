@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.milkbank.api.BabyDto
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
+import app.milkbank.core.Clock
 import app.milkbank.core.isStationInvalid
 import app.milkbank.data.GuardianRepository
 import app.milkbank.station.GuardianIdle
@@ -14,8 +15,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.time.Duration
+import java.time.Instant
 
 const val GUARDIAN_MAX_PACKS = 10
+
+/** The server ends a guardian session 60 s after its last request; ping well before that while the parent is active. */
+private val KEEPALIVE_AFTER: Duration = Duration.ofSeconds(30)
 
 sealed interface GuardianStep {
     data class Start(val phone: String, val babyId: String, val error: String?, val submitting: Boolean) : GuardianStep
@@ -34,6 +42,8 @@ class GuardianViewModel(
     private val onStationInvalid: () -> Unit,
     private val submitUncertain: String,
     private val unexpected: String,
+    private val sessionExpired: String,
+    private val clock: Clock,
     private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val blank = GuardianStep.Start("", "", null, false)
@@ -43,6 +53,10 @@ class GuardianViewModel(
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
 
     private var token: String? = null
+
+    // When the server last answered a guardian request: its session timer counts from there, not from our last touch.
+    private var lastRequest: Instant = clock.now()
+    private val keepAliveLock = Mutex()
 
     // Bumped by every reset: an answer that arrives after the session ended must not touch the new state.
     private var gen = 0
@@ -111,6 +125,7 @@ class GuardianViewModel(
                             return@launch
                         }
                         token = r.value.token
+                        lastRequest = clock.now()
                         idle.arm()
                         _step.value =
                             if (babies.size == 1) GuardianStep.Stock(babies[0]) else GuardianStep.SelectBaby(babies)
@@ -140,12 +155,52 @@ class GuardianViewModel(
     fun startSubmit() {
         val cur = _step.value as? GuardianStep.Stock ?: return
         _step.value = GuardianStep.PickCount(cur.baby, null)
+        keepAliveInBackground()
     }
 
     fun pickCount(n: Int) {
         val cur = _step.value as? GuardianStep.PickCount ?: return
         if (n !in 1..GUARDIAN_MAX_PACKS) return
         _step.value = GuardianStep.ConfirmSubmit(cur.baby, n)
+        keepAliveInBackground()
+    }
+
+    private sealed interface Alive {
+        data object Ok : Alive
+        data object Ended : Alive
+        data class Failed(val message: String) : Alive
+    }
+
+    private fun stale() = !Duration.between(lastRequest, clock.now()).minus(KEEPALIVE_AFTER).isNegative
+
+    /** Steps between login and submit send no requests: keep the server session alive while the parent is active. */
+    private fun keepAliveInBackground() {
+        val st = stationToken() ?: return
+        val t = token ?: return
+        if (!stale()) return
+        val g = gen
+        viewModelScope.launch { keepAlive(st, t, g) }
+    }
+
+    /** Asks the server for the baby list when the last request is stale. Session-over answers end the flow here. */
+    private suspend fun keepAlive(st: String, t: String, g: Int): Alive = keepAliveLock.withLock {
+        if (g != gen) return@withLock Alive.Ended
+        if (!stale()) return@withLock Alive.Ok
+        try {
+            when (val r = guardian().babies(st, t)) {
+                is ApiResult.Ok -> {
+                    if (g != gen) Alive.Ended else { lastRequest = clock.now(); Alive.Ok }
+                }
+                is ApiResult.Err ->
+                    if (g != gen || endIfSessionOver(r.error)) Alive.Ended
+                    else Alive.Failed(if (r.error.status == null) unexpected else r.error.message)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onError(e)
+            if (g != gen) Alive.Ended else Alive.Failed(unexpected)
+        }
     }
 
     /** One step back: confirmation to the number pad, number pad to the stock screen. Ignored while sending. */
@@ -168,8 +223,18 @@ class GuardianViewModel(
         val g = gen
         viewModelScope.launch {
             try {
+                // A stale server session would answer 401: ping first, and send only once it is known to be alive.
+                when (val a = keepAlive(st, t, g)) {
+                    Alive.Ended -> return@launch
+                    is Alive.Failed -> {
+                        if (g == gen) _step.value = GuardianStep.Stock(cur.baby, a.message) // nothing was sent
+                        return@launch
+                    }
+                    Alive.Ok -> {}
+                }
                 when (val r = guardian().submit(st, t, cur.baby.patientId, cur.count)) {
                     is ApiResult.Ok -> if (g == gen) {
+                        lastRequest = clock.now()
                         _step.value = GuardianStep.Done(cur.baby, cur.count, r.value.balance, r.value.pendingCount)
                     }
                     is ApiResult.Err -> if (g == gen && !endIfSessionOver(r.error)) {
@@ -198,6 +263,7 @@ class GuardianViewModel(
         }
         if (e.status == 401) {
             reset()
+            _step.value = blank.copy(error = sessionExpired) // cleared as soon as the parent types
             return true
         }
         return false
@@ -208,6 +274,7 @@ class GuardianViewModel(
         try {
             when (val r = guardian().babies(st, t)) {
                 is ApiResult.Ok -> if (g == gen) {
+                    lastRequest = clock.now()
                     val fresh = r.value.firstOrNull { it.patientId == baby.patientId }
                     _step.value = if (fresh != null) GuardianStep.Stock(fresh, notice) else fallback
                 }

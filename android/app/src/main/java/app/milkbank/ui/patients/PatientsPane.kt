@@ -125,7 +125,7 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
             factory = viewModelFactory {
                 initializer {
                     StationSetupViewModel(
-                        { container.stations }, container.stationStore, container.session, unexpected,
+                        { container.stations }, { container.auth }, container.stationStore, container.session, unexpected,
                         logUnexpected("station setup failed"),
                     )
                 }

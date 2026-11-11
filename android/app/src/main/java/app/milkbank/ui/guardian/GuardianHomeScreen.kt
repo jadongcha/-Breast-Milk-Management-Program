@@ -35,6 +35,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.milkbank.AppContainer
 import app.milkbank.R
+import app.milkbank.core.ElapsedClock
+import app.milkbank.station.GuardianIdle
 import app.milkbank.ui.logUnexpected
 import app.milkbank.ui.station.StationReleaseDialog
 import app.milkbank.ui.station.StationReleaseViewModel
@@ -65,6 +67,7 @@ fun GuardianHomeRoute(container: AppContainer) {
     // Guardian session state (token, step, inputs) lives in this ViewModel only: memory, never saved.
     val submitUncertain = stringResource(R.string.guardian_submit_uncertain)
     val unexpectedText = stringResource(R.string.network_error)
+    val sessionExpiredText = stringResource(R.string.guardian_session_expired)
     val currentToken by rememberUpdatedState(config.token)
     val guardianVm: GuardianViewModel = viewModel(
         factory = viewModelFactory {
@@ -72,7 +75,8 @@ fun GuardianHomeRoute(container: AppContainer) {
                 GuardianViewModel(
                     { container.guardian }, { currentToken }, container.guardianIdle,
                     { container.stationInvalid.value = true },
-                    submitUncertain, unexpectedText, logUnexpected("guardian flow failed"),
+                    submitUncertain, unexpectedText, sessionExpiredText, ElapsedClock,
+                    logUnexpected("guardian flow failed"),
                 )
             }
         },
@@ -138,6 +142,7 @@ fun GuardianHomeRoute(container: AppContainer) {
                 initializer {
                     StationReleaseViewModel(
                         { container.auth }, { container.stations }, container.stationStore, container.session,
+                        GuardianIdle(ElapsedClock),
                         adminOnly, offline, unexpected, logUnexpected("station release failed"),
                     )
                 }

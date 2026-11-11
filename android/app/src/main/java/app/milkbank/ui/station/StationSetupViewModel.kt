@@ -3,8 +3,8 @@ package app.milkbank.ui.station
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.milkbank.core.ApiResult
+import app.milkbank.data.AuthRepository
 import app.milkbank.data.StationRepository
-import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
 import app.milkbank.station.StationConfig
 import app.milkbank.station.StationStore
@@ -25,6 +25,7 @@ sealed interface SetupState {
 /** Registers this tablet as a submission station: create, save the token, then end the staff session. */
 class StationSetupViewModel(
     private val stations: () -> StationRepository,
+    private val auth: () -> AuthRepository,
     private val store: StationStore,
     private val session: SessionManager,
     private val unexpectedError: String = "",
@@ -54,7 +55,7 @@ class StationSetupViewModel(
                 when (val r = stations().create(c.name)) {
                     is ApiResult.Ok -> {
                         store.save(StationConfig(r.value.stationToken, r.value.station.name))
-                        session.end(LogoutReason.USER)
+                        auth().logout() // ends the staff session at once and tells the server in the background
                         // The user is going to the guardian home, not the login screen: drop the logout
                         // reason right away so the root's logout handling does not redirect to Login.
                         session.consumeLogoutReason()

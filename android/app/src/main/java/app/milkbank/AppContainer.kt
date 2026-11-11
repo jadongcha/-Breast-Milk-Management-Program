@@ -34,6 +34,7 @@ import app.milkbank.session.SessionManager
 import app.milkbank.station.GuardianIdle
 import app.milkbank.station.KeystoreTokenCipher
 import app.milkbank.station.StationStore
+import app.milkbank.ui.logUnexpected
 import app.milkbank.ui.patients.ResultBannerStore
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +68,9 @@ class AppContainer(context: Context) {
     private val debuggable = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     val serverConfigStore = ServerConfigStore(appContext.serverDataStore)
-    val stationStore = StationStore(appContext.stationDataStore, KeystoreTokenCipher())
+    val stationStore = StationStore(
+        appContext.stationDataStore, KeystoreTokenCipher(), onError = logUnexpected("station store read failed"),
+    )
     val session = SessionManager(SystemClock)
     val idleWatcher = IdleWatcher(ElapsedClock, session)
 

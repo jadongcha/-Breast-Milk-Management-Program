@@ -32,6 +32,7 @@ class KeystoreTokenCipher : TokenCipher {
         return String(c.doFinal(bytes, IV_BYTES, bytes.size - IV_BYTES), Charsets.UTF_8)
     }
 
+    @Synchronized // two callers must not both generate the key
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance(PROVIDER).apply { load(null) }
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }

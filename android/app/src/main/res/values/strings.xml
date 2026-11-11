@@ -155,6 +155,7 @@
     <string name="guardian_done_submitted">방금 제출한 모유 %1$d팩</string>
     <string name="guardian_done_stock">현재 확인된 냉동 재고 %1$d팩</string>
     <string name="guardian_done_note">제출한 %1$d팩은 간호사 확인 후 재고에 반영됩니다</string>
+    <string name="guardian_session_expired">시간이 지나 처음 화면으로 돌아왔습니다. 다시 입력해 주세요</string>
     <string name="guardian_submit_uncertain">제출이 됐는지 확인하지 못했습니다. 재고 화면을 확인해 주세요</string>
     <string name="station_invalid_message">등록된 제출처 기기가 아닙니다. 직원에게 알려 주세요</string>
     <string name="station_release_title">제출처 모드 해제 (관리자)</string>

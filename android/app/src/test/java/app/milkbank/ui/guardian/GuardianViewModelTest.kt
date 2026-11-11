@@ -61,7 +61,7 @@ class GuardianViewModelTest {
     private val start = GuardianStep.Start("", "", null, false)
 
     private fun vm() = GuardianViewModel(
-        { repo }, { stationToken }, idle, { invalidCalls++ }, "확인 못함", "오류", {},
+        { repo }, { stationToken }, idle, { invalidCalls++ }, "확인 못함", "오류", "세션 끝", clock, {},
     )
 
     @Before fun setUp() = Dispatchers.setMain(Dispatchers.Unconfined)
@@ -200,8 +200,97 @@ class GuardianViewModelTest {
         vm.pickCount(2)
         repo.submitHandler = { ApiResult.Err(ApiError(401, "만료")) }
         vm.submit()
-        assertEquals(start, vm.step.value)
+        assertEquals(start.copy(error = "세션 끝"), vm.step.value)
         assertEquals(0, invalidCalls)
+        vm.onPhone("010") // typing clears the notice
+        assertEquals(null, (vm.step.value as GuardianStep.Start).error)
+    }
+
+    // The server's session timer counts from the last request, not the last touch.
+    private val okSubmit = ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH), 2, 3))
+
+    @Test fun submitAfter40sWithoutRequests_pingsBeforeSubmit() {
+        val vm = vm()
+        login(vm)
+        val calls = mutableListOf<String>()
+        repo.babiesHandler = { calls += "babies"; ApiResult.Ok(listOf(b1)) }
+        repo.submitHandler = { calls += "submit"; okSubmit }
+        clock.advance(Duration.ofSeconds(20)); idle.touch()
+        vm.startSubmit() // 20 s: no ping yet
+        assertEquals(emptyList<String>(), calls)
+        clock.advance(Duration.ofSeconds(20)); idle.touch()
+        vm.pickCount(3) // 40 s since login: ping
+        assertEquals(listOf("babies"), calls)
+        clock.advance(Duration.ofSeconds(5)); idle.touch()
+        vm.submit() // 5 s since the ping: no second one
+        assertEquals(listOf("babies", "submit"), calls)
+        assertTrue(vm.step.value is GuardianStep.Done)
+    }
+
+    @Test fun submitStraightAfter40s_pingsOnceThenSubmits() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        val calls = mutableListOf<String>()
+        repo.babiesHandler = { calls += "babies"; ApiResult.Ok(listOf(b1)) }
+        repo.submitHandler = { calls += "submit"; okSubmit }
+        clock.advance(Duration.ofSeconds(40)); idle.touch()
+        vm.submit()
+        assertEquals(listOf("babies", "submit"), calls)
+    }
+
+    @Test fun within30s_noExtraCall() {
+        val vm = vm()
+        login(vm)
+        var babiesCalls = 0
+        repo.babiesHandler = { babiesCalls++; ApiResult.Ok(listOf(b1)) }
+        repo.submitHandler = { okSubmit }
+        clock.advance(Duration.ofSeconds(29))
+        vm.startSubmit()
+        vm.pickCount(3)
+        vm.submit()
+        assertEquals(0, babiesCalls)
+        assertEquals(1, repo.submitCalls)
+    }
+
+    @Test fun keepalive401_returnsToStartWithNotice_andNeverSubmits() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        repo.babiesHandler = { ApiResult.Err(ApiError(401, "만료")) }
+        clock.advance(Duration.ofSeconds(40))
+        vm.submit()
+        assertEquals(start.copy(error = "세션 끝"), vm.step.value)
+        assertEquals(0, repo.submitCalls)
+        assertEquals(0, invalidCalls)
+    }
+
+    @Test fun keepaliveNetworkError_doesNotSubmit_showsStockWithMessage() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        repo.babiesHandler = { ApiResult.Err(ApiError(null, "net")) }
+        clock.advance(Duration.ofSeconds(40))
+        vm.submit()
+        assertEquals(GuardianStep.Stock(b1, "오류"), vm.step.value)
+        assertEquals(0, repo.submitCalls)
+        assertFalse(vm.submitting.value)
+    }
+
+    @Test fun keepaliveStationInvalid_callsCallback() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        repo.babiesHandler = { ApiResult.Err(ApiError(401, "x", "station_invalid")) }
+        clock.advance(Duration.ofSeconds(40))
+        vm.submit()
+        assertEquals(1, invalidCalls)
+        assertEquals(start, vm.step.value)
+        assertEquals(0, repo.submitCalls)
     }
 
     @Test fun typedInputsAreClearedByIdleToo() {
