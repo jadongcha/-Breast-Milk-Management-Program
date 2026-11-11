@@ -57,6 +57,19 @@
 관리자가 한 명뿐이고 비밀번호를 잊었다면, 위 명령으로 다른 아이디의 관리자를 하나 더 만든다.
 그 관리자로 로그인해 `POST /staff/{id}/reset-password`로 기존 관리자의 비밀번호를 초기화한다. 로그인 잠금도 함께 풀린다.
 
+## 제출처와 보호자 제출 (2-3a단계)
+
+보호자가 제출처 기기(태블릿)에서 가져온 팩 수를 제출하면, 간호사가 실제 수를 확인한 뒤에야 재고가 늘어난다(확인하면 일반 입고 기록이 생긴다).
+
+- 제출처 등록·사용 중지: `POST /stations`, `GET /stations`, `PATCH /stations/{id}`(관리자). 등록할 때 제출처 토큰이 한 번만 보인다.
+- 제출처 기기: `GET /station/self`
+- 보호자: `POST /guardian/login`, `GET /guardian/babies`, `POST /guardian/submissions`, `POST /guardian/logout`
+- 간호사: `GET /submissions?status=pending`(확인 대기 목록), `POST /submissions/{id}/confirm`(실제 팩 수로 확인), `POST /submissions/{id}/reject`(반려: `not_received` 또는 `other`+메모)
+- 제출처 기기는 모든 `/guardian/*` 요청에 헤더 `X-Station-Token`을 보내고, 보호자 로그인 뒤에는 `Authorization: Bearer <보호자 토큰>`도 보낸다. 보호자는 그 제출처 기기에서만 로그인할 수 있다.
+- 보호자 세션은 마지막 요청 뒤 1분이 지나면 끝난다.
+- 잠금: 같은 전화번호로 5번 로그인에 실패하면 10분, 한 제출처에서 10분 안에 20번 실패하면 그 제출처 로그인이 10분 동안 잠긴다. 아기 한 명당 확인 대기 제출은 5건까지다.
+- 사용 중지한 제출처는 다시 켤 수 없다(필요하면 새로 등록한다). 사용 중지하면 그 제출처의 보호자 세션도 끝난다.
+
 ## 개발용 실행 (HTTP)
 
 개발과 시험용이다. 암호화되지 않으므로 병원 내부망의 실제 운영에는 쓰지 않는다.

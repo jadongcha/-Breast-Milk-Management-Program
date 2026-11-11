@@ -4,7 +4,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import DiscardReason, PatientStatus, RecordKind, Role
+from .models import (
+    DiscardReason,
+    PatientStatus,
+    RecordKind,
+    RejectReason,
+    Role,
+    SubmissionStatus,
+)
 
 
 class StaffOut(BaseModel):
@@ -172,3 +179,69 @@ class BabyOut(BaseModel):
 class GuardianLoginOut(BaseModel):
     token: str
     babies: list[BabyOut]
+
+
+class SubmitIn(BaseModel):
+    patient_id: int
+    count: int
+
+
+class SubmittedOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    count: int
+    submitted_at: datetime
+
+
+class SubmitResult(BaseModel):
+    submission: SubmittedOut
+    balance: int
+    pending_count: int
+
+
+class SubmissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    count: int
+    submitted_at: datetime
+    status: SubmissionStatus
+    confirmed_count: int | None
+    handled_by: int | None
+    handled_at: datetime | None
+    reject_reason: RejectReason | None
+    memo: str | None
+
+
+class PendingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    baby_id: str
+    balance: int
+    station_name: str
+    submitted_at: datetime
+    count: int
+    discharged: bool
+
+
+class ConfirmIn(BaseModel):
+    count: int
+
+
+class ConfirmResult(BaseModel):
+    record: RecordOut
+    balance: int
+    submission: SubmissionOut
+
+
+class RejectIn(BaseModel):
+    reason: RejectReason
+    memo: str | None = None
+
+
+class RejectResult(BaseModel):
+    submission: SubmissionOut

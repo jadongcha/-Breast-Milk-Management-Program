@@ -1,8 +1,16 @@
 from fastapi import APIRouter, Request, Response
 
 from .. import guardians as guardian_service
+from .. import submissions as submission_service
 from ..errors import DomainError
-from ..schemas import BabyOut, GuardianLoginIn, GuardianLoginOut
+from ..schemas import (
+    BabyOut,
+    GuardianLoginIn,
+    GuardianLoginOut,
+    SubmitIn,
+    SubmitResult,
+    SubmittedOut,
+)
 from .deps import DbDep, GuardianDep, StationDep
 
 router = APIRouter(prefix="/guardian", tags=["guardian"])
@@ -31,3 +39,18 @@ def babies(db: DbDep, session: GuardianDep):
 def logout(db: DbDep, session: GuardianDep):
     guardian_service.logout(db, session)
     return Response(status_code=204)
+
+
+@router.post("/submissions", response_model=SubmitResult, status_code=201)
+def submit(body: SubmitIn, request: Request, db: DbDep, session: GuardianDep):
+    sub = submission_service.submit(
+        db, request.app.state.clock, request.app.state.config,
+        session=session, patient_id=body.patient_id, count=body.count,
+    )
+    baby = next(b for b in guardian_service.guardian_babies(db, session.phone)
+                if b.patient_id == sub.patient_id)
+    return SubmitResult(
+        submission=SubmittedOut.model_validate(sub),
+        balance=baby.balance,
+        pending_count=baby.pending_count,
+    )

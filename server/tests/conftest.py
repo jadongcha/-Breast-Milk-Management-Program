@@ -123,3 +123,45 @@ def seeded_engine(engine, clock):
         )
         session.commit()
     return engine
+
+
+# --- 보호자/제출 시험 공용 ---
+def _patient(client, admin_token, reg_no, phone="010-1234-5678"):
+    r = client.post(
+        "/patients",
+        json={
+            "reg_no": reg_no, "baby_name": "아기", "bed": "1",
+            "guardian_name": "김엄마", "guardian_phone": phone,
+        },
+        headers=auth(admin_token),
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+@pytest.fixture
+def world(client, admin_token):
+    def station(name):
+        r = client.post("/stations", json={"name": name}, headers=auth(admin_token))
+        return r.json()["station"]["id"], {"X-Station-Token": r.json()["station_token"]}
+
+    a_id, a = station("제출처 A")
+    b_id, b = station("제출처 B")
+    p1 = _patient(client, admin_token, "DEMO-01")
+    p2 = _patient(client, admin_token, "DEMO-02")
+    r = client.post(
+        f"/patients/{p1}/records", json={"kind": "intake", "count": 3},
+        headers=auth(admin_token),
+    )
+    assert r.status_code == 201, r.text
+    return {"a_id": a_id, "b_id": b_id, "a": a, "b": b, "p1": p1, "p2": p2}
+
+
+def _login(client, st, phone="010-1234-5678", baby="DEMO-01"):
+    return client.post("/guardian/login", json={"phone": phone, "baby_id": baby}, headers=st)
+
+
+def _gauth(st, token):
+    return {**st, **auth(token)}
+
+

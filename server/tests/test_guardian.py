@@ -1,5 +1,4 @@
-import pytest
-from conftest import auth
+from conftest import _gauth, _login, auth
 from sqlalchemy import select
 
 from milkbank.models import (
@@ -12,45 +11,6 @@ from milkbank.models import (
 
 PHONE = "01012345678"
 BAD_LOGIN = "전화번호 또는 아기 ID가 올바르지 않습니다"
-
-
-def _patient(client, admin_token, reg_no, phone="010-1234-5678"):
-    r = client.post(
-        "/patients",
-        json={
-            "reg_no": reg_no, "baby_name": "아기", "bed": "1",
-            "guardian_name": "김엄마", "guardian_phone": phone,
-        },
-        headers=auth(admin_token),
-    )
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
-
-
-@pytest.fixture
-def world(client, admin_token):
-    def station(name):
-        r = client.post("/stations", json={"name": name}, headers=auth(admin_token))
-        return r.json()["station"]["id"], {"X-Station-Token": r.json()["station_token"]}
-
-    a_id, a = station("A")
-    b_id, b = station("B")
-    p1 = _patient(client, admin_token, "DEMO-01")
-    p2 = _patient(client, admin_token, "DEMO-02")
-    r = client.post(
-        f"/patients/{p1}/records", json={"kind": "intake", "count": 3},
-        headers=auth(admin_token),
-    )
-    assert r.status_code == 201, r.text
-    return {"a_id": a_id, "b_id": b_id, "a": a, "b": b, "p1": p1, "p2": p2}
-
-
-def _login(client, st, phone="010-1234-5678", baby="DEMO-01"):
-    return client.post("/guardian/login", json={"phone": phone, "baby_id": baby}, headers=st)
-
-
-def _gauth(st, token):
-    return {**st, **auth(token)}
 
 
 def test_login_lists_all_admitted_babies_of_phone(client, world):
