@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 
 enum class LogoutReason { USER, EXPIRED, IDLE }
 
@@ -25,6 +26,11 @@ class SessionManager(@Suppress("unused") private val clock: Clock) {
 
     fun start(token: String, staff: StaffDto) {
         _state.value = Session(token, staff)
+    }
+
+    /** Replaces the logged-in staff (e.g. after a password change), keeping the token; no-op when logged out. */
+    fun updateStaff(staff: StaffDto) {
+        _state.update { cur -> cur?.copy(staff = staff) }
     }
 
     /** Ends the session and records [reason]; a no-op when nobody is logged in. */

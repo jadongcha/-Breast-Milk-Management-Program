@@ -25,4 +25,16 @@
     <string name="register_save_failed">서버 정보를 저장하지 못했습니다. 다시 시도해 주세요</string>
     <string name="camera_permission_settings">설정에서 카메라 권한 허용</string>
     <string name="camera_start_failed">카메라를 시작할 수 없습니다</string>
+    <string name="login_title">모유 관리</string>
+    <string name="username_label">아이디</string>
+    <string name="password_label">비밀번호</string>
+    <string name="login_button">로그인</string>
+    <string name="register_again">서버 다시 등록</string>
+    <string name="password_change_title">비밀번호 변경</string>
+    <string name="password_forced_notice">처음 로그인하셨습니다. 새 비밀번호로 바꿔 주세요</string>
+    <string name="current_password_label">현재 비밀번호</string>
+    <string name="new_password_label">새 비밀번호</string>
+    <string name="confirm_password_label">새 비밀번호 확인</string>
+    <string name="password_change_button">비밀번호 변경</string>
+    <string name="back">뒤로</string>
 </resources>

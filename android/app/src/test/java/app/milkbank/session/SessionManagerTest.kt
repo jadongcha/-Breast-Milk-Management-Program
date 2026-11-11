@@ -59,4 +59,14 @@ class SessionManagerTest {
         assertNull(m.state.value)
         assertEquals(LogoutReason.EXPIRED, m.logoutReason.value)
     }
+
+    @Test
+    fun updateStaffKeepsTokenAndIgnoresWhenLoggedOut() {
+        val m = manager()
+        m.updateStaff(staff)
+        assertNull(m.state.value)
+        m.start("tok", staff.copy(mustChangePassword = true))
+        m.updateStaff(staff.copy(mustChangePassword = false))
+        assertEquals(Session("tok", staff), m.state.value)
+    }
 }
