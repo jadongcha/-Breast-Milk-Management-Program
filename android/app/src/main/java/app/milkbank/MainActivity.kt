@@ -27,6 +27,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
@@ -41,6 +43,7 @@ import app.milkbank.ui.MilkbankTheme
 import app.milkbank.ui.OfflineBanner
 import app.milkbank.ui.Password
 import app.milkbank.ui.navigateClearingStack
+import app.milkbank.ui.needsLoginRedirect
 import app.milkbank.ui.startDestination
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
@@ -136,6 +139,16 @@ class MainActivity : ComponentActivity() {
             session.consumeLogoutReason()
             if (reason == LogoutReason.EXPIRED || reason == LogoutReason.IDLE) {
                 scope.launch { snackbar.showSnackbar(loginAgain) }
+            }
+        }
+        // Process death restores the back stack but not the in-memory session.
+        val backStackEntry by navController.currentBackStackEntryAsState()
+        val destination = backStackEntry?.destination
+        val routeIsPublic = destination == null ||
+            destination.hasRoute<Register>() || destination.hasRoute<Login>()
+        LaunchedEffect(sessionState, routeIsPublic, current.config) {
+            if (needsLoginRedirect(sessionState, current.config != null, routeIsPublic)) {
+                navController.navigateClearingStack(Login)
             }
         }
         LaunchedEffect(passwordRequired) {

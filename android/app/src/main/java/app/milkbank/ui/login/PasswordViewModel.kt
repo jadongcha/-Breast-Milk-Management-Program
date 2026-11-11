@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.milkbank.core.ApiResult
 import app.milkbank.data.AuthRepository
 import app.milkbank.session.SessionManager
+import app.milkbank.ui.Login
 import app.milkbank.ui.Patients
 import app.milkbank.ui.Route
 import kotlinx.coroutines.CancellationException
@@ -44,8 +45,14 @@ class PasswordViewModel(
                 when (val r = auth.changePassword(current, new)) {
                     is ApiResult.Ok -> {
                         // The repository does not touch the session; clear the forced-change flag here.
-                        session.state.value?.let { s -> session.updateStaff(s.staff.copy(mustChangePassword = false)) }
-                        _state.update { it.copy(loading = false, next = Patients) }
+                        // If the session ended meanwhile (401, idle logout), do not enter the app.
+                        val s = session.state.value
+                        if (s == null) {
+                            _state.update { it.copy(loading = false, next = Login) }
+                        } else {
+                            session.updateStaff(s.staff.copy(mustChangePassword = false))
+                            _state.update { it.copy(loading = false, next = Patients) }
+                        }
                     }
                     is ApiResult.Err -> _state.update { it.copy(loading = false, error = r.error.message) }
                 }
@@ -59,6 +66,7 @@ class PasswordViewModel(
 
     /** Leaves the forced flow: ends the session (MainActivity then shows Login). */
     fun logout() {
+        if (_state.value.loading) return // never abandon an in-flight change
         viewModelScope.launch { auth.logout() }
     }
 }

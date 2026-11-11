@@ -20,6 +20,7 @@
     <string name="register_rescan">다시 찍기</string>
     <string name="register_change_server">바꾸기</string>
     <string name="cancel">취소</string>
+    <string name="logout">로그아웃</string>
     <string name="menu_more">더보기</string>
     <string name="register_from_file">파일에서 QR 읽기 (개발용)</string>
     <string name="register_save_failed">서버 정보를 저장하지 못했습니다. 다시 시도해 주세요</string>

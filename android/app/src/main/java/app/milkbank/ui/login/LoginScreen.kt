@@ -58,6 +58,7 @@ fun LoginScreen(viewModel: LoginViewModel, onNavigate: (Route) -> Unit, onRegist
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
+                    modifier = Modifier.heightIn(min = 56.dp),
                     text = { Text(stringResource(R.string.register_again)) },
                     onClick = {
                         menuOpen = false

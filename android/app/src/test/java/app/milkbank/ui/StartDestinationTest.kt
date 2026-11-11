@@ -23,4 +23,13 @@ class StartDestinationTest {
     @Test fun noSession_login() = assertEquals(Login, startDestination(config, null))
     @Test fun mustChange_password() = assertEquals(Password, startDestination(config, session(true)))
     @Test fun otherwise_patients() = assertEquals(Patients, startDestination(config, session(false)))
+
+    @Test
+    fun loginRedirectOnlyWhenConfiguredWithoutSessionOnProtectedRoute() {
+        val sess = Session("t", app.milkbank.api.StaffDto(1, "u", "n", "nurse", true, false))
+        assertEquals(true, needsLoginRedirect(null, hasConfig = true, routeIsPublic = false))
+        assertEquals(false, needsLoginRedirect(null, hasConfig = true, routeIsPublic = true))
+        assertEquals(false, needsLoginRedirect(null, hasConfig = false, routeIsPublic = false))
+        assertEquals(false, needsLoginRedirect(sess, hasConfig = true, routeIsPublic = false))
+    }
 }

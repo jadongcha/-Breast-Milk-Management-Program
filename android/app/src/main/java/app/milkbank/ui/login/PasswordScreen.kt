@@ -22,7 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +49,9 @@ fun PasswordScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var current by rememberSaveable { mutableStateOf("") }
-    var new by rememberSaveable { mutableStateOf("") }
-    var confirm by rememberSaveable { mutableStateOf("") }
+    var current by remember { mutableStateOf("") }
+    var new by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
 
     LaunchedEffect(state.next) {
         state.next?.let {
@@ -59,7 +59,7 @@ fun PasswordScreen(
             viewModel.onNavigated()
         }
     }
-    val leave = { if (forced) viewModel.logout() else onBack() }
+    val leave = { if (!state.loading) { if (forced) viewModel.logout() else onBack() } }
     BackHandler(onBack = leave)
 
     fun submit() = viewModel.submit(current, new, confirm)
@@ -125,7 +125,7 @@ fun PasswordScreen(
                 enabled = !state.loading,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) {
-                Text(stringResource(if (forced) R.string.cancel else R.string.back))
+                Text(stringResource(if (forced) R.string.logout else R.string.back))
             }
         }
     }

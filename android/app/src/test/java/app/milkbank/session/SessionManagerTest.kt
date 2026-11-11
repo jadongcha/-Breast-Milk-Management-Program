@@ -69,4 +69,15 @@ class SessionManagerTest {
         m.updateStaff(staff.copy(mustChangePassword = false))
         assertEquals(Session("tok", staff), m.state.value)
     }
+
+    @Test
+    fun passwordChangeForcedByServerUntilStaffUpdated() {
+        val m = manager()
+        m.start("tok", staff)
+        assertEquals(false, m.passwordChangeForced)
+        m.requirePasswordChange()
+        assertEquals(true, m.passwordChangeForced)
+        m.updateStaff(staff.copy(mustChangePassword = false))
+        assertEquals(false, m.passwordChangeForced)
+    }
 }

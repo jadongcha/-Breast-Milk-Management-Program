@@ -83,4 +83,25 @@ class PasswordViewModelTest {
         v.logout(); advanceUntilIdle()
         assertEquals(1, auth.logoutCalls)
     }
+
+    @Test fun logoutWhileLoading_isIgnored() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        auth.changeHandler = { _, _ -> gate.await(); ApiResult.Ok(Unit) }
+        val v = vm()
+        v.submit("old", "new", "new"); advanceUntilIdle()
+        v.logout(); advanceUntilIdle()
+        assertEquals(0, auth.logoutCalls)
+        gate.complete(Unit); advanceUntilIdle()
+    }
+
+    @Test fun successAfterSessionEnded_goesToLogin() = runTest {
+        auth.changeHandler = { _, _ ->
+            session.end(app.milkbank.session.LogoutReason.EXPIRED)
+            ApiResult.Ok(Unit)
+        }
+        val v = vm()
+        v.submit("old", "new", "new"); advanceUntilIdle()
+        assertEquals(app.milkbank.ui.Login, v.state.value.next)
+        assertNull(session.state.value)
+    }
 }

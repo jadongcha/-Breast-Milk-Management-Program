@@ -72,7 +72,9 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
             val mismatch = stringResource(R.string.password_mismatch)
             val unexpected = stringResource(R.string.network_error)
-            val forced = remember { container.session.state.value?.staff?.mustChangePassword == true }
+            val forced = remember {
+                container.session.state.value?.staff?.mustChangePassword == true || container.session.passwordChangeForced
+            }
             val vm: PasswordViewModel = viewModel(
                 factory = viewModelFactory {
                     initializer { PasswordViewModel(container.auth, container.session, mismatch, unexpected) }

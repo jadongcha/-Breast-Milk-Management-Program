@@ -24,3 +24,10 @@ fun startDestination(config: ServerConfig?, session: Session?): Route = when {
     session.staff.mustChangePassword -> Password
     else -> Patients
 }
+
+/**
+ * Guard for restored back stacks (process death leaves screens but no in-memory session):
+ * a registered app without a session may only show the public screens.
+ */
+fun needsLoginRedirect(session: Session?, hasConfig: Boolean, routeIsPublic: Boolean): Boolean =
+    hasConfig && session == null && !routeIsPublic

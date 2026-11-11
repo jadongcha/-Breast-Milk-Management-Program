@@ -21,15 +21,21 @@ class SessionManager(@Suppress("unused") private val clock: Clock) {
     private val _logoutReason = MutableStateFlow<LogoutReason?>(null)
     val logoutReason: StateFlow<LogoutReason?> = _logoutReason.asStateFlow()
 
+    // True once the server demanded a password change; the staff flag alone may be stale.
+    @Volatile var passwordChangeForced: Boolean = false
+        private set
+
     private val _passwordRequired = MutableStateFlow(false)
     val passwordRequired: StateFlow<Boolean> = _passwordRequired.asStateFlow()
 
     fun start(token: String, staff: StaffDto) {
+        passwordChangeForced = false
         _state.value = Session(token, staff)
     }
 
     /** Replaces the logged-in staff (e.g. after a password change), keeping the token; no-op when logged out. */
     fun updateStaff(staff: StaffDto) {
+        if (!staff.mustChangePassword) passwordChangeForced = false
         _state.update { cur -> cur?.copy(staff = staff) }
     }
 
@@ -55,6 +61,7 @@ class SessionManager(@Suppress("unused") private val clock: Clock) {
     }
 
     fun requirePasswordChange() {
+        passwordChangeForced = true
         _passwordRequired.value = true
     }
 
