@@ -23,17 +23,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,11 +51,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
 import app.milkbank.ui.IdleAwareDialog
-import app.milkbank.ui.idleTouch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 private val ButtonHeight = 56.dp
 
@@ -79,6 +75,7 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
     }
     var permanentlyDenied by remember { mutableStateOf(false) }
     var cameraFailed by remember { mutableStateOf(false) }
+    var testFileMissing by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
         // Denied and the system will not ask again: only the Settings screen can help.
@@ -108,30 +105,6 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
             )
-            if (debuggable) {
-                var menuOpen by remember { mutableStateOf(false) }
-                Box {
-                    TextButton(onClick = { menuOpen = true }, modifier = Modifier.heightIn(min = ButtonHeight)) {
-                        Text(stringResource(R.string.menu_more), fontSize = 18.sp)
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.idleTouch()) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.register_from_file), fontSize = 18.sp) },
-                            modifier = Modifier.heightIn(min = ButtonHeight),
-                            onClick = {
-                                menuOpen = false
-                                scope.launch {
-                                    val raw = withContext(Dispatchers.IO) {
-                                        runCatching { File(context.getExternalFilesDir(null), "qr.txt").readText().trim() }
-                                            .getOrDefault("")
-                                    }
-                                    viewModel.onScanned(raw)
-                                }
-                            },
-                        )
-                    }
-                }
-            }
         }
 
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -201,6 +174,34 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
             )
             Button(onClick = viewModel::dismiss, modifier = Modifier.fillMaxWidth().heightIn(min = ButtonHeight)) {
                 Text(stringResource(R.string.register_rescan), fontSize = 18.sp)
+            }
+        }
+
+        if (debuggable) {
+            if (testFileMissing) {
+                Text(
+                    stringResource(R.string.register_test_file_missing),
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            OutlinedButton(
+                enabled = state != RegisterState.Checking,
+                onClick = {
+                    scope.launch {
+                        val raw = withContext(Dispatchers.IO) { readTestQr(context.getExternalFilesDir(null)) }
+                        if (raw == null) {
+                            testFileMissing = true
+                        } else {
+                            testFileMissing = false
+                            viewModel.onScanned(raw)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = ButtonHeight).navigationBarsPadding(),
+            ) {
+                Text(stringResource(R.string.register_test_button), fontSize = 18.sp)
             }
         }
     }
