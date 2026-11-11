@@ -25,11 +25,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import app.milkbank.R
+import app.milkbank.api.RecordDto
+import app.milkbank.core.formatKst
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
@@ -106,9 +111,17 @@ fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit)
     DialogShell(onDismiss) {
         Text(stringResource(R.string.kind_use), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedButton(onClick = { if (count > 1) count-- }, enabled = count > 1, modifier = MinButton) { Text("−") }
+            val decrease = stringResource(R.string.decrease_pack)
+            OutlinedButton(
+                onClick = { if (count > 1) count-- }, enabled = count > 1,
+                modifier = MinButton.semantics { contentDescription = decrease },
+            ) { Text("−", Modifier.clearAndSetSemantics { }) }
             Text(stringResource(R.string.packs, count), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-            OutlinedButton(onClick = { if (count < MAX_PACKS) count++ }, enabled = count < MAX_PACKS, modifier = MinButton) { Text("+") }
+            val increase = stringResource(R.string.increase_pack)
+            OutlinedButton(
+                onClick = { if (count < MAX_PACKS) count++ }, enabled = count < MAX_PACKS,
+                modifier = MinButton.semantics { contentDescription = increase },
+            ) { Text("+", Modifier.clearAndSetSemantics { }) }
         }
         IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
         DialogButtons(stringResource(R.string.kind_use), true, onDismiss) { onNext(count, memo) }
@@ -181,9 +194,16 @@ fun ConfirmStockDialog(
 }
 
 @Composable
-fun ConfirmCancelDialog(submitting: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmCancelDialog(record: RecordDto, submitting: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     DialogShell(onDismiss, dismissable = !submitting) {
         Text(stringResource(R.string.cancel_confirm), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        // Which record: kind, packs, time and staff, so a wrong row is noticed before confirming.
+        Text(
+            stringResource(R.string.cancel_record_summary, kindLabel(record.kind), record.count, formatKst(record.createdAt), record.staffName),
+            Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {
                 Text(stringResource(R.string.back))

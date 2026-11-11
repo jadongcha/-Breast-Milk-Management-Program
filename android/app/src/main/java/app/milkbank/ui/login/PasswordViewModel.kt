@@ -22,7 +22,7 @@ data class PasswordState(
 )
 
 class PasswordViewModel(
-    private val auth: AuthRepository,
+    private val auth: () -> AuthRepository, // current at call time: the server may be re-registered
     private val session: SessionManager,
     private val mismatchMessage: String,
     private val unexpectedError: String = "",
@@ -43,7 +43,7 @@ class PasswordViewModel(
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val r = auth.changePassword(current, new)) {
+                when (val r = auth().changePassword(current, new)) {
                     is ApiResult.Ok -> {
                         // The repository does not touch the session; clear the forced-change flag here.
                         // If the session ended meanwhile (401, idle logout), do not enter the app.
@@ -69,6 +69,6 @@ class PasswordViewModel(
     /** Leaves the forced flow: ends the session (MainActivity then shows Login). */
     fun logout() {
         if (_state.value.loading) return // never abandon an in-flight change
-        viewModelScope.launch { auth.logout() }
+        auth().logout()
     }
 }

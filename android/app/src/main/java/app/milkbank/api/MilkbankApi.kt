@@ -2,6 +2,7 @@ package app.milkbank.api
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -11,7 +12,8 @@ interface MilkbankApi {
     @GET("health") suspend fun health()
 
     @POST("auth/login") suspend fun login(@Body body: LoginRequest): LoginResponse
-    @POST("auth/logout") suspend fun logout()
+    /** [authorization] is explicit ("Bearer <token>"): the call is sent after the local session is gone. */
+    @POST("auth/logout") suspend fun logout(@Header("Authorization") authorization: String)
     @POST("auth/password") suspend fun changePassword(@Body body: PasswordChangeRequest)
     @GET("auth/me") suspend fun me(): StaffDto
 

@@ -5,6 +5,7 @@ import app.milkbank.api.StaffDto
 import app.milkbank.core.ApiResult
 import app.milkbank.data.AuthRepository
 import app.milkbank.server.ServerConfig
+import kotlinx.coroutines.Job
 
 fun staffDto(mustChange: Boolean = false) =
     StaffDto(1, "nurse1", "김간호", "nurse", true, mustChange)
@@ -23,9 +24,9 @@ class FakeAuthRepository : AuthRepository {
         return loginHandler(username, password)
     }
 
-    override suspend fun logout(): ApiResult<Unit> {
+    override fun logout(): Job {
         logoutCalls++
-        return ApiResult.Ok(Unit)
+        return Job().apply { complete() }
     }
 
     override suspend fun changePassword(current: String, new: String): ApiResult<Unit> {

@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -25,12 +27,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -45,14 +47,12 @@ import app.milkbank.AppContainer
 import app.milkbank.R
 import app.milkbank.ui.logUnexpected
 import app.milkbank.core.SystemClock
-import app.milkbank.session.LogoutReason
 import app.milkbank.ui.MilkbankColors
 import app.milkbank.ui.Password
 import app.milkbank.ui.PatientDetail
 import app.milkbank.ui.PatientForm
 import app.milkbank.ui.Staff
 import app.milkbank.ui.idleTouch
-import kotlinx.coroutines.launch
 
 private const val WIDE_DP = 840
 
@@ -60,6 +60,7 @@ private const val WIDE_DP = 840
 fun rememberDetailViewModel(container: AppContainer, id: Int): PatientDetailViewModel {
     val saved = stringResource(R.string.saved)
     val unexpected = stringResource(R.string.network_error)
+    val uncertain = stringResource(R.string.save_uncertain)
     return viewModel(
         key = "patient-detail-$id",
         factory = viewModelFactory {
@@ -73,6 +74,7 @@ fun rememberDetailViewModel(container: AppContainer, id: Int): PatientDetailView
                     clock = SystemClock,
                     savedMessage = saved,
                     unexpectedError = unexpected,
+                    saveUncertainMessage = uncertain,
                     onError = logUnexpected("patient detail action failed"),
                 )
             }
@@ -96,13 +98,15 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
     val session by container.session.state.collectAsStateWithLifecycle()
     val staff = session?.staff
     val isAdmin = staff?.role == "admin"
-    val scope = rememberCoroutineScope()
     var selectedId by rememberSaveable { mutableStateOf<Int?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
+
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0),
                 title = {
                     Text(stringResource(R.string.home_title), fontWeight = FontWeight.Bold)
                 },
@@ -111,34 +115,39 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                     staff?.let { Text(it.name, Modifier.padding(end = 8.dp), style = MaterialTheme.typography.titleMedium) }
                     Box {
                         val moreDesc = stringResource(R.string.menu_more)
-                        IconButton(onClick = { menuOpen = true }, modifier = Modifier.padding(end = 4.dp).semantics { contentDescription = moreDesc }) {
-                            Text("⋮", style = MaterialTheme.typography.headlineMedium)
+                        IconButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.padding(end = 4.dp).size(56.dp).semantics { contentDescription = moreDesc },
+                        ) {
+                            // The glyph is decoration: TalkBack reads only "더보기".
+                            Text("⋮", Modifier.clearAndSetSemantics { }, style = MaterialTheme.typography.headlineMedium)
                         }
                         DropdownMenu(menuOpen, { menuOpen = false }, modifier = Modifier.idleTouch()) {
                             DropdownMenuItem(
+                                modifier = Modifier.heightIn(min = 56.dp),
                                 text = { Text(stringResource(R.string.password_change_title)) },
                                 onClick = { menuOpen = false; navController.navigate(Password) },
                             )
                             if (isAdmin) {
                                 HorizontalDivider()
                                 DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
                                     text = { Text(stringResource(R.string.menu_admin_patient_form)) },
                                     onClick = { menuOpen = false; navController.navigate(PatientForm(null)) },
                                 )
                                 DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
                                     text = { Text(stringResource(R.string.menu_admin_staff)) },
                                     onClick = { menuOpen = false; navController.navigate(Staff) },
                                 )
                                 HorizontalDivider()
                             }
                             DropdownMenuItem(
+                                modifier = Modifier.heightIn(min = 56.dp),
                                 text = { Text(stringResource(R.string.logout)) },
                                 onClick = {
                                     menuOpen = false
-                                    scope.launch {
-                                        container.auth.logout()
-                                        container.session.end(LogoutReason.USER)
-                                    }
+                                    container.auth.logout()
                                 },
                             )
                         }
@@ -192,8 +201,10 @@ fun PatientDetailRoute(container: AppContainer, id: Int, navController: NavHostC
     val isAdmin = session?.staff?.role == "admin"
     LifecycleResumeEffect(id) { vm.refresh(); onPauseOrDispose { } }
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0),
                 title = {},
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 navigationIcon = {

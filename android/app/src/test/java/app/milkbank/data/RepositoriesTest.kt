@@ -151,11 +151,71 @@ class RepositoriesTest {
         assertTrue(b, b.contains("\"discard_reason\":\"contaminated\"") && b.contains("\"kind\":\"discard\""))
     }
 
+    private fun gatedServer(latch: java.util.concurrent.CountDownLatch, response: () -> MockResponse) {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                return response()
+            }
+        }
+    }
+
     @Test
-    fun logoutEndsSessionEvenOnFailure() = runBlocking {
+    fun logoutEndsSessionBeforeTheNetworkCallCompletes() = runBlocking {
+        session.start("tok", staff)
+        val latch = java.util.concurrent.CountDownLatch(1)
+        gatedServer(latch) { MockResponse() }
+        val job = auth().logout()
+        assertNull(session.state.value) // already on the login screen path
+        assertEquals(LogoutReason.USER, session.logoutReason.value)
+        assertTrue(job.isActive) // the server call is still pending
+        latch.countDown()
+        job.join()
+        assertEquals("Bearer tok", server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test
+    fun logoutEndsSessionEvenOnNetworkFailure() = runBlocking {
+        session.start("tok", staff)
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START))
+        auth().logout().join()
+        assertNull(session.state.value)
+        assertEquals(LogoutReason.USER, session.logoutReason.value)
+    }
+
+    @Test
+    fun logoutEndsSessionEvenOnServerError() = runBlocking {
         session.start("tok", staff)
         server.enqueue(MockResponse().setResponseCode(500))
-        auth().logout()
+        auth().logout().join()
+        assertNull(session.state.value)
+    }
+
+    @Test
+    fun logoutUnauthorizedDoesNotReportExpired() = runBlocking {
+        session.start("tok", staff)
+        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"detail":"인증이 필요합니다"}"""))
+        auth().logout().join()
+        assertEquals(LogoutReason.USER, session.logoutReason.value)
+    }
+
+    @Test
+    fun staleLogoutCallNeverEndsNewerSession() = runBlocking {
+        session.start("A", staff)
+        val latch = java.util.concurrent.CountDownLatch(1)
+        gatedServer(latch) { MockResponse().setResponseCode(401) }
+        val job = auth().logout()
+        session.start("B", staff) // the next nurse logs in while the logout call is in flight
+        latch.countDown()
+        job.join()
+        assertEquals("Bearer A", server.takeRequest().getHeader("Authorization"))
+        assertEquals("B", session.state.value?.token)
+    }
+
+    @Test
+    fun logoutWithoutServerStillEnds() = runBlocking {
+        session.start("tok", staff)
+        HttpAuthRepository(null, session, net).logout().join()
         assertNull(session.state.value)
     }
 

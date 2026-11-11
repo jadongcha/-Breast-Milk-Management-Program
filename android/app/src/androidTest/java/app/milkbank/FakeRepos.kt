@@ -55,9 +55,9 @@ class FakeAuth(private val session: SessionManager) : AuthRepository {
             ApiResult.Err(ApiError(401, "아이디 또는 비밀번호가 올바르지 않습니다"))
         }
 
-    override suspend fun logout(): ApiResult<Unit> {
+    override fun logout(): kotlinx.coroutines.Job {
         session.end(LogoutReason.USER)
-        return ApiResult.Ok(Unit)
+        return kotlinx.coroutines.Job().apply { complete() }
     }
 
     override suspend fun changePassword(current: String, new: String): ApiResult<Unit> = ApiResult.Ok(Unit)

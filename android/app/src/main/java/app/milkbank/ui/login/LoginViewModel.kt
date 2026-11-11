@@ -26,7 +26,7 @@ data class LoginState(
 }
 
 class LoginViewModel(
-    private val auth: AuthRepository,
+    private val auth: () -> AuthRepository, // current at call time: the server may be re-registered
     private val session: SessionManager,
     private val unexpectedError: String = "",
     private val onError: (Throwable) -> Unit = {},
@@ -46,7 +46,7 @@ class LoginViewModel(
         val password = cur.password
         viewModelScope.launch {
             try {
-                when (val r = auth.login(username, password)) {
+                when (val r = auth().login(username, password)) {
                     is ApiResult.Ok -> {
                         session.start(r.value.token, r.value.staff)
                         val next = if (r.value.staff.mustChangePassword || r.value.mustChangePassword) Password else Patients

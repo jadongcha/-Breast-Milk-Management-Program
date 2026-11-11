@@ -32,7 +32,7 @@ class PasswordViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(StandardTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm() = PasswordViewModel(auth, session, "새 비밀번호가 서로 다릅니다")
+    private fun vm() = PasswordViewModel({ auth }, session, "새 비밀번호가 서로 다릅니다")
 
     @Test fun mismatch_noServerCall() = runTest {
         val v = vm()
@@ -71,6 +71,20 @@ class PasswordViewModelTest {
         assertEquals(Patients, v.state.value.next)
     }
 
+    @Test fun usesTheRepositoryCurrentAtCallTime() = runTest {
+        val first = FakeAuthRepository()
+        val second = FakeAuthRepository()
+        var current: FakeAuthRepository = first
+        val v = PasswordViewModel({ current }, session, "새 비밀번호가 서로 다릅니다")
+        current = second // server re-registered after the screen was created
+        v.submit("old", "new", "new"); advanceUntilIdle()
+        assertEquals(0, first.changeCalls)
+        assertEquals(1, second.changeCalls)
+        v.logout()
+        assertEquals(0, first.logoutCalls)
+        assertEquals(1, second.logoutCalls)
+    }
+
     @Test fun emptyFields_doNothing() = runTest {
         val v = vm()
         v.submit("", "new", "new"); advanceUntilIdle()
@@ -78,9 +92,9 @@ class PasswordViewModelTest {
         assertEquals(0, auth.changeCalls)
     }
 
-    @Test fun logout_callsRepository() = runTest {
+    @Test fun logout_callsRepositoryImmediately() = runTest {
         val v = vm()
-        v.logout(); advanceUntilIdle()
+        v.logout() // no dispatcher turn needed: the repository ends the session itself
         assertEquals(1, auth.logoutCalls)
     }
 

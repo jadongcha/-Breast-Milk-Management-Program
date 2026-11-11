@@ -64,7 +64,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val unexpected = stringResource(R.string.network_error)
             val vm: LoginViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { LoginViewModel(container.auth, container.session, unexpected, logUnexpected("login failed")) }
+                    initializer { LoginViewModel({ container.auth }, container.session, unexpected, logUnexpected("login failed")) }
                 },
             )
             LoginScreen(
@@ -82,7 +82,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             }
             val vm: PasswordViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { PasswordViewModel(container.auth, container.session, mismatch, unexpected, logUnexpected("password change failed")) }
+                    initializer { PasswordViewModel({ container.auth }, container.session, mismatch, unexpected, logUnexpected("password change failed")) }
                 },
             )
             PasswordScreen(

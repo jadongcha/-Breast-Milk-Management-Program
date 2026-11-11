@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.milkbank.api.PatientDetailDto
 import app.milkbank.api.RecordDto
 import app.milkbank.api.RecordResultDto
+import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
 import app.milkbank.data.PatientRepository
@@ -34,14 +35,15 @@ class PatientDetailViewModel(
     private val clock: Clock,
     private val savedMessage: String = "",
     private val unexpectedError: String = "",
+    private val saveUncertainMessage: String = "",
     private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _detail = MutableStateFlow<PatientDetailDto?>(null)
     val detail: StateFlow<PatientDetailDto?> = _detail.asStateFlow()
     private val _pending = MutableStateFlow<PendingAction?>(null)
     val pending: StateFlow<PendingAction?> = _pending.asStateFlow()
-    private val _pendingCancel = MutableStateFlow<Int?>(null)
-    val pendingCancel: StateFlow<Int?> = _pendingCancel.asStateFlow()
+    private val _pendingCancel = MutableStateFlow<RecordDto?>(null)
+    val pendingCancel: StateFlow<RecordDto?> = _pendingCancel.asStateFlow()
     private val _submitting = MutableStateFlow(false)
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
@@ -121,7 +123,7 @@ class PatientDetailViewModel(
                         else banner.notifyChanged()
                     }
                     // 401: the interceptor already ended the session and MainActivity shows the login screen.
-                    is ApiResult.Err -> _error.value = r.error.message
+                    is ApiResult.Err -> onWriteFailed(r.error)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -135,8 +137,9 @@ class PatientDetailViewModel(
         }
     }
 
-    fun askCancel(recordId: Int) {
-        if (!_submitting.value) _pendingCancel.value = recordId
+    /** Opens the cancel confirmation for [record]; the record is kept so the dialog can identify it. */
+    fun askCancel(record: RecordDto) {
+        if (!_submitting.value) _pendingCancel.value = record
     }
 
     fun dismissCancel() {
@@ -155,7 +158,7 @@ class PatientDetailViewModel(
                         regNo?.let { banner.updateBalance(it, r.value.balance) }
                         banner.notifyChanged()
                     }
-                    is ApiResult.Err -> _error.value = r.error.message
+                    is ApiResult.Err -> onWriteFailed(r.error)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -166,6 +169,29 @@ class PatientDetailViewModel(
                 _pendingCancel.value = null
                 _submitting.value = false
             }
+        }
+    }
+
+    /**
+     * A failure without an HTTP status (timeout, lost connection) may have happened after the server saved
+     * the record: show the server's real state and say that saving is uncertain.
+     */
+    private suspend fun onWriteFailed(error: ApiError) {
+        if (error.status != null) {
+            _error.value = error.message
+            return
+        }
+        _error.value = "${error.message}\n$saveUncertainMessage"
+        refreshJob?.cancel()
+        writeSeq++ // an older in-flight refresh must not overwrite the one below
+        val startedAt = writeSeq
+        try {
+            val r = patientRepo().detail(patientId)
+            if (r is ApiResult.Ok && startedAt == writeSeq) _detail.value = r.value
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onError(e)
         }
     }
 

@@ -43,7 +43,10 @@ class PatientDetailViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun vm() =
-        PatientDetailViewModel(7, { patients }, { stock }, banner, session, clock, "저장했습니다", "서버에 연결할 수 없습니다")
+        PatientDetailViewModel(
+            7, { patients }, { stock }, banner, session, clock, "저장했습니다", "서버에 연결할 수 없습니다",
+            saveUncertainMessage = "저장이 됐는지 확인하지 못했습니다",
+        )
 
     @Test fun intake_success_updatesBalanceRecordsSavedAndBanner() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
@@ -125,8 +128,9 @@ class PatientDetailViewModelTest {
 
     @Test fun cancel_success_updatesBalanceAndMarksTarget() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
-        v.askCancel(50)
-        assertEquals(50, v.pendingCancel.value)
+        val rec = recordDto(50, staffId = 1, createdAt = clock.now())
+        v.askCancel(rec)
+        assertEquals(rec, v.pendingCancel.value) // the record itself is held, not looked up again later
         v.cancelRecord(50); advanceUntilIdle()
         val d = v.detail.value!!
         assertEquals(2, d.balance)
@@ -198,5 +202,63 @@ class PatientDetailViewModelTest {
         assertFalse(v.canCancel(recordDto(1, staffId = 2, createdAt = clock.now())))
         session.end(LogoutReason.USER)
         assertFalse(v.canCancel(recordDto(1, staffId = 1, createdAt = clock.now())))
+    }
+
+    @Test fun networkErrorOnAdd_refreshesFromServerAndWarnsUncertain() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        // The write reached the server but the answer was lost: the next detail shows balance 8.
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 8, listOf(recordDto(100)))) }
+        stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        val calls = patients.detailCalls
+        v.request("intake", 3, null, null); v.confirm(); advanceUntilIdle()
+        assertEquals(calls + 1, patients.detailCalls)
+        assertEquals(8, v.detail.value!!.balance) // the refresh was applied
+        assertTrue(v.error.value!!.contains("서버에 연결할 수 없습니다"))
+        assertTrue(v.error.value!!.contains("저장이 됐는지 확인하지 못했습니다"))
+        assertFalse(v.submitting.value)
+        assertNull(v.pending.value)
+    }
+
+    @Test fun networkErrorOnCancel_refreshesFromServerAndWarnsUncertain() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 2, emptyList())) }
+        stock.cancelHandler = { ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        val calls = patients.detailCalls
+        v.cancelRecord(50); advanceUntilIdle()
+        assertEquals(calls + 1, patients.detailCalls)
+        assertEquals(2, v.detail.value!!.balance)
+        assertTrue(v.error.value!!.contains("저장이 됐는지 확인하지 못했습니다"))
+        assertNull(v.pendingCancel.value)
+    }
+
+    @Test fun httpConflictOnAdd_noRefreshNoUncertainMessage() = runTest {
+        stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(409, "재고가 부족합니다 (현재 0팩)")) }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        val calls = patients.detailCalls
+        v.request("use", 1, null, null); v.confirm(); advanceUntilIdle()
+        assertEquals(calls, patients.detailCalls)
+        assertEquals("재고가 부족합니다 (현재 0팩)", v.error.value)
+    }
+
+    @Test fun httpErrorOnCancel_noRefreshNoUncertainMessage() = runTest {
+        stock.cancelHandler = { ApiResult.Err(ApiError(409, "이미 취소된 기록입니다")) }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        val calls = patients.detailCalls
+        v.cancelRecord(50); advanceUntilIdle()
+        assertEquals(calls, patients.detailCalls)
+        assertEquals("이미 취소된 기록입니다", v.error.value)
+    }
+
+    @Test fun uncertainRefresh_isNotBlockedByTheWriteGuard() = runTest {
+        // An older refresh is still pending when the write fails: the post-write refresh must still win.
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        patients.detailHandler = { gate.await(); ApiResult.Ok(detailDto(7, "DEMO-1", 5, emptyList())) }
+        v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 8, emptyList())) }
+        stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(null, "x")) }
+        v.request("intake", 3, null, null); v.confirm(); advanceUntilIdle()
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(8, v.detail.value!!.balance)
     }
 }

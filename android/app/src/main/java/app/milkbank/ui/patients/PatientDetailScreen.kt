@@ -127,7 +127,7 @@ fun PatientDetailScreen(
                 } else {
                     MilkCard {
                         d.records.forEach { r ->
-                            RecordRow(r, canCancel = viewModel.canCancel(r), enabled = canSave) { viewModel.askCancel(r.id) }
+                            RecordRow(r, canCancel = viewModel.canCancel(r), enabled = canSave) { viewModel.askCancel(r) }
                         }
                     }
                 }
@@ -155,9 +155,9 @@ fun PatientDetailScreen(
     if (p != null && regNo != null) {
         ConfirmStockDialog(regNo, p, submitting, onConfirm = viewModel::confirm, onDismiss = viewModel::dismissPending)
     }
-    val cancelId = pendingCancel
-    if (cancelId != null) {
-        ConfirmCancelDialog(submitting, onConfirm = { viewModel.cancelRecord(cancelId) }, onDismiss = viewModel::dismissCancel)
+    val cancelRecord = pendingCancel
+    if (cancelRecord != null) {
+        ConfirmCancelDialog(cancelRecord, submitting, onConfirm = { viewModel.cancelRecord(cancelRecord.id) }, onDismiss = viewModel::dismissCancel)
     }
 }
 

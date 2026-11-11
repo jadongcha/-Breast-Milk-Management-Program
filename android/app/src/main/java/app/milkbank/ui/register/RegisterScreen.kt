@@ -59,6 +59,10 @@ import kotlinx.coroutines.withContext
 
 private val ButtonHeight = 56.dp
 
+/** The scanner consumes a QR only when the result can be used: scanning state and server access allowed. */
+fun scannerArmed(state: RegisterState, localNetworkGranted: Boolean): Boolean =
+    state == RegisterState.Scanning && localNetworkGranted
+
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
@@ -119,8 +123,8 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (granted) {
                 QrScanner(
-                    enabled = state == RegisterState.Scanning,
-                    onQr = { raw -> if (localNetwork.granted) viewModel.onScanned(raw) },
+                    enabled = scannerArmed(state, localNetwork.granted),
+                    onQr = viewModel::onScanned,
                     onError = { cameraFailed = true },
                     modifier = Modifier.fillMaxSize(),
                 )

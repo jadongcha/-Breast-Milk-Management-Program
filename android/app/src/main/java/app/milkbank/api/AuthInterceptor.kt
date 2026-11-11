@@ -10,7 +10,10 @@ const val PASSWORD_CHANGE_REQUIRED_DETAIL = "비밀번호를 먼저 변경해야
 class AuthInterceptor(private val session: SessionManager) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
-        val token = session.state.value?.token
+        // A request that carries its own Authorization (the logout call) is not tied to the current
+        // session: neither replace its token nor let its 401 end whichever session is current.
+        val explicit = original.header("Authorization") != null
+        val token = if (explicit) null else session.state.value?.token
         val request = if (token != null) {
             original.newBuilder().header("Authorization", "Bearer $token").build()
         } else {

@@ -21,7 +21,12 @@ import app.milkbank.server.HttpClientFactory
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -29,7 +34,11 @@ import okhttp3.OkHttpClient
 
 interface AuthRepository {
     suspend fun login(username: String, password: String): ApiResult<LoginResponse>
-    suspend fun logout(): ApiResult<Unit>
+    /**
+     * Ends the local session at once, then tells the server in the background (best effort).
+     * The returned job completes when the server call is done; callers may ignore it.
+     */
+    fun logout(): Job
     suspend fun changePassword(current: String, new: String): ApiResult<Unit>
 
     /** Pre-registration check against [config]; Ok on HTTP 200. */
@@ -74,6 +83,7 @@ class HttpAuthRepository(
     private val networkError: String,
     private val healthApiFactory: ((ServerConfig) -> MilkbankApi)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob()),
     private val cleanup: (OkHttpClient?) -> Unit = { it?.shutdownQuietly() },
 ) : AuthRepository {
     override suspend fun login(username: String, password: String): ApiResult<LoginResponse> {
@@ -82,10 +92,21 @@ class HttpAuthRepository(
         return r
     }
 
-    override suspend fun logout(): ApiResult<Unit> {
-        val r = api.call(networkError) { it.logout() }
-        session.end(LogoutReason.USER) // always leave, even if the server was unreachable
-        return r
+    override fun logout(): Job {
+        val token = session.state.value?.token
+        session.end(LogoutReason.USER) // leave at once: the UI must not wait for the network
+        val a = api
+        if (token == null || a == null) return Job().apply { complete() }
+        // App-scoped (outlives the screen/ViewModel); the token is sent explicitly so session state is irrelevant.
+        return appScope.launch(ioDispatcher) {
+            try {
+                a.logout("Bearer $token")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // best effort: the server drops idle tokens anyway
+            }
+        }
     }
 
     override suspend fun changePassword(current: String, new: String): ApiResult<Unit> =

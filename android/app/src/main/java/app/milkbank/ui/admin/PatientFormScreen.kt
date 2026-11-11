@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,8 +62,11 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
     LaunchedEffect(saved) { if (saved) onDone() }
 
     Scaffold(
+
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0),
                 title = {
                     Text(stringResource(if (editing) R.string.patient_form_edit_title else R.string.patient_form_new_title))
                 },

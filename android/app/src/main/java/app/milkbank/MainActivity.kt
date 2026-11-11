@@ -1,11 +1,19 @@
 package app.milkbank
 
+import android.content.pm.ApplicationInfo
+import android.graphics.Color
 import android.os.Bundle
 import android.view.MotionEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +68,17 @@ class MainActivity : ComponentActivity() {
     private val container get() = (application as MilkbankApp).container
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // targetSdk 37 forces edge-to-edge: light theme, so dark system-bar icons (not the dark-mode default).
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.argb(0x33, 0, 0, 0)),
+        )
         super.onCreate(savedInstanceState)
+        // Baby IDs and stock are patient data: no screenshots / recents thumbnails in release builds.
+        // Debug builds keep screenshots for development and end-to-end checks.
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
@@ -178,7 +196,8 @@ class MainActivity : ComponentActivity() {
             LocalOnline provides online,
             LocalIdleTouch provides { container.idleWatcher.touch() },
         ) {
-            Column(Modifier.fillMaxSize().idleTouch()) {
+            // One place for the system bars / camera cutout: banners and screens below never draw under them.
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).idleTouch()) {
                 // The register screen shows its own notice.
                 if (current.config != null && !destination.let { it != null && it.hasRoute<Register>() }) {
                     LocalNetworkPermissionNotice(localNetwork)

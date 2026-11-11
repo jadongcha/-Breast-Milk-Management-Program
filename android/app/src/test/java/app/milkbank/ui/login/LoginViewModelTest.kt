@@ -32,7 +32,7 @@ class LoginViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(StandardTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm(user: String = "nurse1", pw: String = "pw") = LoginViewModel(auth, session).also {
+    private fun vm(user: String = "nurse1", pw: String = "pw") = LoginViewModel({ auth }, session).also {
         it.onUsernameChange(user)
         it.onPasswordChange(pw)
     }
@@ -106,6 +106,18 @@ class LoginViewModelTest {
         v.submit(); advanceUntilIdle()
         v.onPasswordChange("a")
         assertNull(v.state.value.error)
+    }
+
+    @Test fun usesTheRepositoryCurrentAtCallTime() = runTest {
+        val stale = FakeAuthRepository()
+        var current = stale
+        val v = LoginViewModel({ current }, session)
+        val fresh = FakeAuthRepository()
+        current = fresh // server re-registered after the screen was created
+        v.onUsernameChange("nurse1"); v.onPasswordChange("pw")
+        v.submit(); advanceUntilIdle()
+        assertEquals(0, stale.loginCalls)
+        assertEquals(1, fresh.loginCalls)
     }
 
     @Test fun onNavigated_clearsNext() = runTest {

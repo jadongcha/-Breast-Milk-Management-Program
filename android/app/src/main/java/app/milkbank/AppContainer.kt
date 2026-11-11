@@ -116,7 +116,7 @@ class AppContainer(context: Context) {
     }
 
     private fun build(api: MilkbankApi?) = Repositories(
-        auth = HttpAuthRepository(api, session, networkError),
+        auth = HttpAuthRepository(api, session, networkError, appScope = scope),
         patients = HttpPatientRepository(api, networkError),
         stock = HttpStockRepository(api, networkError),
         staff = HttpStaffRepository(api, networkError),
