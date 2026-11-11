@@ -30,13 +30,15 @@ class RegisterViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
+    private var saveThrows = false
+
     private fun vm(current: ServerConfig? = null) = RegisterViewModel(
         health = {
             healthCalls++
             if (healthOk) ApiResult.Ok(Unit) else ApiResult.Err(ApiError(null, "x"))
         },
         currentConfig = { current },
-        save = { saved = it },
+        save = { if (saveThrows) throw java.io.IOException("disk"); saved = it },
         endSession = { sessionEnds++ },
     )
 
@@ -108,5 +110,30 @@ class RegisterViewModelTest {
         healthOk = true
         v.onScanned(qr("https://a:1", pinA))
         assertEquals(RegisterState.Done, v.state.value)
+    }
+
+    @Test fun saveThrows_becomesErrorNotStuck() {
+        saveThrows = true
+        val v = vm()
+        v.onScanned(qr("https://a:1", pinA))
+        assertEquals(RegisterState.Error(R.string.register_save_failed), v.state.value)
+        assertNull(saved)
+    }
+
+    @Test fun confirmSaveThrows_becomesError() {
+        saveThrows = true
+        val v = vm(ServerConfig("https://a:1", pinA))
+        v.onScanned(qr("https://b:2", pinB))
+        v.confirmDifferentServer()
+        assertEquals(RegisterState.Error(R.string.register_save_failed), v.state.value)
+        assertEquals(0, sessionEnds)
+    }
+
+    @Test fun confirmFromNonConfirmState_isIgnored() {
+        val v = vm()
+        v.confirmDifferentServer()
+        assertEquals(RegisterState.Scanning, v.state.value)
+        assertNull(saved)
+        assertEquals(0, sessionEnds)
     }
 }

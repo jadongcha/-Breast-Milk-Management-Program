@@ -27,12 +27,19 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Camera preview that reports the first QR code seen. After a result, frames are ignored until
  * [enabled] turns true again. The camera is unbound and the ML Kit scanner closed on leaving.
+ * [onError] is called (on the main thread) when the camera cannot be started.
  */
 @Composable
-fun QrScanner(enabled: Boolean, onQr: (String) -> Unit, modifier: Modifier = Modifier) {
+fun QrScanner(
+    enabled: Boolean,
+    onQr: (String) -> Unit,
+    onError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnQr by rememberUpdatedState(onQr)
+    val currentOnError by rememberUpdatedState(onError)
     val armed = remember { AtomicBoolean(enabled) }
     LaunchedEffect(enabled) { armed.set(enabled) }
     val previewView = remember {
@@ -50,31 +57,43 @@ fun QrScanner(enabled: Boolean, onQr: (String) -> Unit, modifier: Modifier = Mod
         val mainExecutor = ContextCompat.getMainExecutor(context)
         var disposed = false
         var provider: ProcessCameraProvider? = null
-        val providerFuture = ProcessCameraProvider.getInstance(context)
-        providerFuture.addListener({
-            if (disposed) return@addListener
-            val p = providerFuture.get()
-            provider = p
-            val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-            analysis.setAnalyzer(executor) { proxy ->
-                val media = proxy.image
-                if (media == null || !armed.get()) {
-                    proxy.close()
-                    return@setAnalyzer
-                }
-                scanner.process(InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees))
-                    .addOnSuccessListener(mainExecutor) { codes ->
-                        val raw = codes.firstNotNullOfOrNull { it.rawValue }
-                        if (raw != null && armed.compareAndSet(true, false)) currentOnQr(raw)
+        try {
+            val providerFuture = ProcessCameraProvider.getInstance(context)
+            providerFuture.addListener({
+                if (disposed) return@addListener
+                try {
+                    val p = providerFuture.get()
+                    provider = p
+                    val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+                    val analysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                    analysis.setAnalyzer(executor) { proxy ->
+                        try {
+                            val media = proxy.image
+                            if (media == null || !armed.get()) {
+                                proxy.close()
+                                return@setAnalyzer
+                            }
+                            scanner.process(InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees))
+                                .addOnSuccessListener(mainExecutor) { codes ->
+                                    val raw = codes.firstNotNullOfOrNull { it.rawValue }
+                                    if (raw != null && armed.compareAndSet(true, false)) currentOnQr(raw)
+                                }
+                                .addOnCompleteListener { proxy.close() }
+                        } catch (e: Exception) {
+                            proxy.close()
+                        }
                     }
-                    .addOnCompleteListener { proxy.close() }
-            }
-            p.unbindAll()
-            p.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-        }, mainExecutor)
+                    p.unbindAll()
+                    p.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                } catch (e: Exception) {
+                    currentOnError()
+                }
+            }, mainExecutor)
+        } catch (e: Exception) {
+            currentOnError()
+        }
 
         onDispose {
             disposed = true

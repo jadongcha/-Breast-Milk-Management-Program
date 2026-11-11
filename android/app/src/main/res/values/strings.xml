@@ -22,4 +22,7 @@
     <string name="cancel">취소</string>
     <string name="menu_more">더보기</string>
     <string name="register_from_file">파일에서 QR 읽기 (개발용)</string>
+    <string name="register_save_failed">서버 정보를 저장하지 못했습니다. 다시 시도해 주세요</string>
+    <string name="camera_permission_settings">설정에서 카메라 권한 허용</string>
+    <string name="camera_start_failed">카메라를 시작할 수 없습니다</string>
 </resources>

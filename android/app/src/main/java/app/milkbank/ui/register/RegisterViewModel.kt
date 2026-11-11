@@ -10,6 +10,7 @@ import app.milkbank.server.RegistrationDecision
 import app.milkbank.server.ServerConfig
 import app.milkbank.server.decideRegistration
 import app.milkbank.server.parseQr
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,16 +45,22 @@ class RegisterViewModel(
         }
         _state.value = RegisterState.Checking
         viewModelScope.launch {
-            if (health(config) !is ApiResult.Ok) {
-                _state.value = RegisterState.Error(R.string.register_unreachable)
-                return@launch
-            }
-            _state.value = when (decideRegistration(currentConfig(), config)) {
-                RegistrationDecision.SAVE -> {
-                    save(config)
-                    RegisterState.Done
+            _state.value = try {
+                if (health(config) !is ApiResult.Ok) {
+                    RegisterState.Error(R.string.register_unreachable)
+                } else {
+                    when (decideRegistration(currentConfig(), config)) {
+                        RegistrationDecision.SAVE -> {
+                            save(config)
+                            RegisterState.Done
+                        }
+                        RegistrationDecision.CONFIRM_DIFFERENT_SERVER -> RegisterState.ConfirmDifferentServer(config)
+                    }
                 }
-                RegistrationDecision.CONFIRM_DIFFERENT_SERVER -> RegisterState.ConfirmDifferentServer(config)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                RegisterState.Error(R.string.register_save_failed)
             }
         }
     }
@@ -62,9 +69,15 @@ class RegisterViewModel(
         val pending = _state.value as? RegisterState.ConfirmDifferentServer ?: return
         _state.value = RegisterState.Checking // blocks a second tap while saving
         viewModelScope.launch {
-            save(pending.config)
-            endSession()
-            _state.value = RegisterState.Done
+            _state.value = try {
+                save(pending.config)
+                endSession()
+                RegisterState.Done
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                RegisterState.Error(R.string.register_save_failed)
+            }
         }
     }
 

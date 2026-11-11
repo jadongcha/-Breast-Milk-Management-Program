@@ -1,7 +1,18 @@
 package app.milkbank.ui.register
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,6 +61,12 @@ import java.io.File
 
 private val ButtonHeight = 56.dp
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -60,7 +77,26 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
     var granted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    var permanentlyDenied by remember { mutableStateOf(false) }
+    var cameraFailed by remember { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        granted = ok
+        // Denied and the system will not ask again: only the Settings screen can help.
+        val activity = context.findActivity()
+        permanentlyDenied = !ok && activity != null &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)
+    }
+    // Back from Settings: pick up a permission granted there.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
     LaunchedEffect(state) { if (state == RegisterState.Done) onDone() }
 
@@ -103,6 +139,7 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
                 QrScanner(
                     enabled = state == RegisterState.Scanning,
                     onQr = viewModel::onScanned,
+                    onError = { cameraFailed = true },
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -115,10 +152,32 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
                         textAlign = TextAlign.Center,
                     )
                     Button(
-                        onClick = { launcher.launch(Manifest.permission.CAMERA) },
+                        onClick = {
+                            if (permanentlyDenied) {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                                )
+                            } else {
+                                launcher.launch(Manifest.permission.CAMERA)
+                            }
+                        },
                         modifier = Modifier.heightIn(min = ButtonHeight),
-                    ) { Text(stringResource(R.string.camera_permission_request), fontSize = 18.sp) }
+                    ) {
+                        Text(
+                            stringResource(if (permanentlyDenied) R.string.camera_permission_settings else R.string.camera_permission_request),
+                            fontSize = 18.sp,
+                        )
+                    }
                 }
+            }
+            if (granted && cameraFailed) {
+                Text(
+                    stringResource(R.string.camera_start_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
             }
             if (state == RegisterState.Checking) {
                 Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), modifier = Modifier.fillMaxSize()) {
