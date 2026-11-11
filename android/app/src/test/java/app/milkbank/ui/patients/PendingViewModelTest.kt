@@ -196,6 +196,34 @@ class PendingViewModelTest {
     @Test fun refreshFailure_showsServerMessage() = runTest {
         repo.pendingHandler = { ApiResult.Err(ApiError(500, "서버 오류")) }
         val v = vm(); v.refresh(); advanceUntilIdle()
-        assertEquals("서버 오류", v.error.value)
+        assertEquals("서버 오류", v.refreshError.value)
+        assertNull(v.error.value)
+        repo.pendingHandler = { ApiResult.Ok(repo.items) }
+        v.refresh(); advanceUntilIdle()
+        assertNull(v.refreshError.value)
+    }
+
+    @Test fun confirmUncertainAndRefreshAlsoFails_warningStaysEvenAfterLaterRefreshSucceeds() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        repo.confirmHandler = { _, _ -> ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        repo.pendingHandler = { ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        v.openConfirm(v.items.value.single()); v.confirm(); advanceUntilIdle()
+        assertEquals("처리됐는지 확인하지 못했습니다", v.error.value)
+        assertEquals("서버에 연결할 수 없습니다", v.refreshError.value)
+        repo.pendingHandler = { ApiResult.Ok(repo.items) }
+        v.refresh(); advanceUntilIdle()
+        assertEquals("처리됐는지 확인하지 못했습니다", v.error.value)
+        assertNull(v.refreshError.value)
+        v.openReject(v.items.value.single()) // next dialog clears it
+        assertNull(v.error.value)
+    }
+
+    @Test fun confirm409AndRefreshFails_serverMessageStays() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        repo.confirmHandler = { _, _ -> ApiResult.Err(ApiError(409, "이미 처리된 제출입니다")) }
+        repo.pendingHandler = { ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        v.openConfirm(v.items.value.single()); v.confirm(); advanceUntilIdle()
+        assertEquals("이미 처리된 제출입니다", v.error.value)
+        assertEquals("서버에 연결할 수 없습니다", v.refreshError.value)
     }
 }

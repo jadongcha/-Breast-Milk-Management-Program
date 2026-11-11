@@ -32,17 +32,10 @@ import java.time.Instant
 @Composable
 private fun PendingTitle(item: PendingDto, now: Instant) {
     Text(
-        item.babyId,
-        Modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.displaySmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        textAlign = TextAlign.Center,
-    )
-    Text(
         stringResource(R.string.pending_dialog_title, item.babyId, item.stationName, formatPendingTime(item.submittedAt, now)),
         Modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
     )
 }

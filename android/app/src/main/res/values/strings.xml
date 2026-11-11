@@ -20,6 +20,8 @@
     <string name="confirm_stock">%1$s 아기에게 %2$d팩 %3$s하시겠습니까?</string>
     <string name="home_title">입고 확인 및 재고 관리</string>
     <string name="pending_count_title">입고 확인 대기 %1$d건</string>
+    <string name="pending_label_value">%1$s %2$s</string>
+    <string name="pending_station_time">%1$s · %2$s</string>
     <string name="pending_col_baby">아기 ID</string>
     <string name="pending_col_stock">현재 재고</string>
     <string name="pending_col_station">제출 위치</string>

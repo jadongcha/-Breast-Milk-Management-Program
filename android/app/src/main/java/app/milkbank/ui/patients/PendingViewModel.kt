@@ -34,12 +34,11 @@ sealed interface PendingDialog {
 }
 
 /** Nurse home: guardian submissions waiting for a nurse to confirm the received pack count, or reject. */
-@Suppress("unused")
 class PendingViewModel(
     private val submissions: () -> SubmissionRepository,
     private val banner: ResultBannerStore,
     private val clock: Clock,
-    private val kindLabel: String,
+    @Suppress("unused") private val kindLabel: String,
     private val uncertain: String,
     private val unexpected: String,
     private val onError: (Throwable) -> Unit = {},
@@ -49,13 +48,14 @@ class PendingViewModel(
     private val _dialog = MutableStateFlow<PendingDialog?>(null)
     val dialog: StateFlow<PendingDialog?> = _dialog.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
+    /** Outcome warning of the last confirm/reject (409 text or "uncertain"); stays until the next dialog opens. */
     val error: StateFlow<String?> = _error.asStateFlow()
+    private val _refreshError = MutableStateFlow<String?>(null)
+
+    /** The table could not be loaded; shown separately and never replaces or erases [error]. */
+    val refreshError: StateFlow<String?> = _refreshError.asStateFlow()
 
     private var refreshJob: Job? = null
-
-    // A refresh failure message goes away when a later refresh succeeds; an action message (409, uncertain)
-    // must survive the refresh that follows it, so the nurse actually sees it.
-    private var errorFromRefresh = false
 
     init {
         // Stock changed elsewhere (or by our own confirm): reload. The first value is the initial one.
@@ -71,22 +71,21 @@ class PendingViewModel(
                 when (val r = submissions().pending()) {
                     is ApiResult.Ok -> {
                         _items.value = r.value
-                        if (errorFromRefresh) _error.value = null
+                        _refreshError.value = null
                     }
-                    is ApiResult.Err -> setError(r.error.message, fromRefresh = true)
+                    is ApiResult.Err -> _refreshError.value = r.error.message
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 onError(e)
-                setError(unexpected, fromRefresh = true)
+                _refreshError.value = unexpected
             }
         }
     }
 
-    private fun setError(message: String?, fromRefresh: Boolean = false) {
+    private fun setError(message: String?) {
         _error.value = message
-        errorFromRefresh = fromRefresh && message != null
     }
 
     fun clearError() = setError(null)

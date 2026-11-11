@@ -34,10 +34,12 @@ fun PendingSection(viewModel: PendingViewModel, modifier: Modifier = Modifier) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val dialog by viewModel.dialog.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val refreshError by viewModel.refreshError.collectAsStateWithLifecycle()
     val now = viewModel.now()
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+        refreshError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (items.isEmpty()) {
             Text(stringResource(R.string.pending_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
@@ -133,18 +135,18 @@ private fun PendingCardRow(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(p.babyId, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    stringResource(R.string.pending_col_stock) + " " + stringResource(R.string.packs, p.balance),
+                    stringResource(R.string.pending_label_value, stringResource(R.string.pending_col_stock), stringResource(R.string.packs, p.balance)),
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
             Text(
-                p.stationName + " · " + formatPendingTime(p.submittedAt, now),
+                stringResource(R.string.pending_station_time, p.stationName, formatPendingTime(p.submittedAt, now)),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    stringResource(R.string.pending_col_count) + " " + stringResource(R.string.packs, p.count),
+                    stringResource(R.string.pending_label_value, stringResource(R.string.pending_col_count), stringResource(R.string.packs, p.count)),
                     Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { RowButtons(p, onConfirm, onReject) }
