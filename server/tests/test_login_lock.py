@@ -1,3 +1,4 @@
+from conftest import _login as guardian_login
 from conftest import auth, make_staff
 
 from milkbank.models import LoginAttempt, Role
@@ -155,3 +156,32 @@ def test_create_staff_rejects_overlong_username(db, clock):
         staff_service.create_staff(db, clock, username="z" * 65, name="n", role=Role.NURSE)
     assert e.value.message == "아이디는 64자 이하로 입력해 주세요"
     staff_service.create_staff(db, clock, username="z" * 64, name="n", role=Role.NURSE)
+
+
+def test_colon_username_cannot_lock_station(client, app, world):
+    sid = world["a_id"]
+    for _ in range(6):
+        _fail(client, f"station:{sid}")
+    assert guardian_login(client, world["a"]).status_code == 200
+
+
+def test_colon_username_cannot_lock_guardian_phone(client, app, world):
+    for _ in range(6):
+        _fail(client, "guardian:01012345678")
+    assert guardian_login(client, world["a"]).status_code == 200
+
+
+def test_colon_username_records_nothing(client, app):
+    _fail(client, "station:1", 2)
+    _fail(client, "guardian:01012345678", 2)
+    with app.state.session_factory() as db:
+        assert db.query(LoginAttempt).count() == 0
+
+
+def test_create_staff_rejects_colon(client, admin_token):
+    r = client.post(
+        "/staff", json={"username": "a:b", "name": "x", "role": "nurse"},
+        headers=auth(admin_token),
+    )
+    assert r.status_code == 400, r.text
+    assert r.json()["detail"] == "아이디에 ':'는 쓸 수 없습니다"

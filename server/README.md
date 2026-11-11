@@ -62,7 +62,7 @@
 보호자가 제출처 기기(태블릿)에서 가져온 팩 수를 제출하면, 간호사가 실제 수를 확인한 뒤에야 재고가 늘어난다(확인하면 일반 입고 기록이 생긴다).
 
 - 제출처 등록·사용 중지: `POST /stations`, `GET /stations`, `PATCH /stations/{id}`(관리자). 등록할 때 제출처 토큰이 한 번만 보인다.
-- 제출처 기기: `GET /station/self`
+- 제출처 기기: `GET /station/self`, `DELETE /station/self`(관리자 토큰 + 제출처 토큰. 앱에서 제출처 모드를 해제할 때 부른다)
 - 보호자: `POST /guardian/login`, `GET /guardian/babies`, `POST /guardian/submissions`, `POST /guardian/logout`
 - 간호사: `GET /submissions?status=pending`(확인 대기 목록), `POST /submissions/{id}/confirm`(실제 팩 수로 확인), `POST /submissions/{id}/reject`(반려: `not_received` 또는 `other`+메모)
 - 제출처 기기는 모든 `/guardian/*` 요청에 헤더 `X-Station-Token`을 보내고, 보호자 로그인 뒤에는 `Authorization: Bearer <보호자 토큰>`도 보낸다. 보호자는 그 제출처 기기에서만 로그인할 수 있다.

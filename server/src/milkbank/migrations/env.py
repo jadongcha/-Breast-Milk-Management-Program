@@ -28,7 +28,7 @@ def run_migrations_online() -> None:
     with foreign_keys_off(connection):
         with context.begin_transaction():
             context.run_migrations()
-            check_foreign_keys(connection)  # 마지막 안전장치(단계별 검사는 on_version_apply)
+            check_foreign_keys(connection)  # 커밋 전에 외래 키 위반 행이 없는지 한 번 더 확인, 있으면 RuntimeError로 전부 되돌림(단계별 검사는 on_version_apply)
 
 
 run_migrations_online()

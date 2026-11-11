@@ -33,6 +33,9 @@ def create_staff(
         raise BadRequest("아이디를 입력해 주세요")
     if len(username) > MAX_USERNAME_LEN:
         raise BadRequest("아이디는 64자 이하로 입력해 주세요")
+    if ":" in username:
+        # ':'는 보호자·제출처 잠금 키("guardian:…", "station:…")의 구분자라 쓰지 못하게 한다.
+        raise BadRequest("아이디에 ':'는 쓸 수 없습니다")
     name = name.strip()
     if not name:
         raise BadRequest("이름을 입력해 주세요")
@@ -66,8 +69,9 @@ def login(
     lock_minutes: int = 10,
 ) -> tuple[Staff, str]:
     key = username.strip().lower()
-    if len(key) > MAX_USERNAME_LEN:
-        # 로그인 기록 표가 끝없이 커지지 않도록 기록하지 않는다.
+    if len(key) > MAX_USERNAME_LEN or ":" in key:
+        # 로그인 기록 표가 끝없이 커지지 않도록, 그리고 "station:1" 같은 아이디로
+        # 제출처·보호자 잠금 키를 건드리지 못하도록 기록하지 않는다(':'는 직원 아이디에 없다).
         verify_password(_DUMMY_HASH, password[:MAX_PASSWORD_LEN])
         raise Unauthorized(_BAD_LOGIN)
     too_long = len(password) > MAX_PASSWORD_LEN

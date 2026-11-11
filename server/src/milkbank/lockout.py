@@ -1,6 +1,6 @@
 """로그인 실패 잠금(직원·보호자·제출처 공용). 저장 표는 LoginAttempt(username 칸이 키).
 
-키 규칙: 직원은 아이디 그대로, 보호자는 "guardian:{번호}", 제출처는 "station:{id}".
+키 규칙: 직원은 아이디 그대로, 보호자는 "guardian:{전화번호 해시}", 제출처는 "station:{id}".
 """
 from datetime import datetime, timedelta
 

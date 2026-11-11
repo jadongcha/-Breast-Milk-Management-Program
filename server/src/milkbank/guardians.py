@@ -74,7 +74,8 @@ def login(
     except BadRequest:
         station_failure()
         raise
-    phone_key = f"guardian:{number}"
+    # 전화번호 원문이 로그인 기록 표에 남지 않도록 해시를 키로 쓴다.
+    phone_key = f"guardian:{hash_token(number)}"
     lockout.ensure_not_locked(
         db, phone_key, now,
         f"로그인을 {config.login_lock_threshold}번 실패해 {config.login_lock_minutes}분 동안 "

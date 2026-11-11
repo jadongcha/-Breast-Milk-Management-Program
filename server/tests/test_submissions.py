@@ -253,3 +253,23 @@ def test_cancel_confirmed_intake_keeps_submission_confirmed(client, app, nurse_t
     assert r.status_code == 201 and r.json()["balance"] == 3
     with app.state.session_factory() as db:
         assert db.get(Submission, sid).status == SubmissionStatus.CONFIRMED
+
+
+def test_pending_limit_is_per_baby(client, world):
+    st = world["a"]
+    token = _gtoken(client, st)
+    for _ in range(5):
+        assert _submit(client, st, token, world["p1"], 1).status_code == 201
+    assert _submit(client, st, token, world["p2"], 1).status_code == 201
+
+
+def test_confirm_links_intake_record(client, app, nurse_token, world):
+    st = world["a"]
+    sid = _submit(client, st, _gtoken(client, st), world["p1"], 3).json()["submission"]["id"]
+    r = client.post(f"/submissions/{sid}/confirm", json={"count": 3}, headers=auth(nurse_token))
+    assert r.status_code == 200, r.text
+    rec_id = r.json()["record"]["id"]
+    with app.state.session_factory() as db:
+        sub = db.get(Submission, sid)
+        assert sub.intake_record_id == rec_id
+        assert db.get(StockRecord, rec_id).kind == RecordKind.INTAKE

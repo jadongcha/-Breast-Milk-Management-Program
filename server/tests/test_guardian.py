@@ -3,6 +3,7 @@ from sqlalchemy import select
 
 from milkbank.models import (
     GuardianSession,
+    LoginAttempt,
     Patient,
     PatientStatus,
     Submission,
@@ -176,3 +177,12 @@ def test_logout_ends_session(client, world):
     token = _login(client, st).json()["token"]
     assert client.post("/guardian/logout", headers=_gauth(st, token)).status_code == 204
     assert client.get("/guardian/babies", headers=_gauth(st, token)).status_code == 401
+
+
+def test_failed_guardian_login_does_not_store_phone_in_plain(client, app, world):
+    for _ in range(5):
+        assert _login(client, world["a"], baby="WRONG").status_code == 401
+    with app.state.session_factory() as db:
+        rows = [r.username for r in db.scalars(select(LoginAttempt))]
+    assert rows
+    assert not any("01012345678" in u for u in rows)
