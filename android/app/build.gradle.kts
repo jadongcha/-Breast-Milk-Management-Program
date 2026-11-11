@@ -29,11 +29,6 @@ android {
     buildFeatures {
         compose = true
     }
-    // connectedDebugAndroidTest installs fresh: grant runtime permissions (e.g. the local-network one) so the
-    // permission gate does not cover the screens under test.
-    installation {
-        installOptions += "-g"
-    }
 }
 
 kotlin {

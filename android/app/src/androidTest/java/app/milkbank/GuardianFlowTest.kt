@@ -37,6 +37,7 @@ class GuardianFlowTest {
 
     @Before
     fun setUp() {
+        grantLocalNetworkPermission()
         runBlocking {
             previousConfig = container.serverConfigStore.config.first()
             previousStation = container.stationStore.config.first()
@@ -96,7 +97,7 @@ class GuardianFlowTest {
         waitForText("제출처 태블릿 · $FAKE_STATION_NAME", timeoutMillis = 20_000)
         rule.onNodeWithText("보호자 전화번호").performTextInput(FAKE_GUARDIAN_PHONE)
         rule.onNodeWithText("아기 ID").performTextInput(FAKE_REG_NO)
-        rule.onNodeWithText("확인").performClick()
+        rule.onNode(hasText("확인") and hasClickAction()).performClick()
 
         waitForText("현재 확인된 냉동 모유")
         assertNameNotShown()

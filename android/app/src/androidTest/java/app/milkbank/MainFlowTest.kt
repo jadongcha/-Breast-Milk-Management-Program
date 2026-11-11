@@ -35,6 +35,7 @@ class MainFlowTest {
 
     @Before
     fun setUp() {
+        grantLocalNetworkPermission()
         runBlocking { previousConfig = container.serverConfigStore.config.first() }
         configRead = true
         container.overrideForTest(fakeRepositories(container.session, FakeWorld()))
