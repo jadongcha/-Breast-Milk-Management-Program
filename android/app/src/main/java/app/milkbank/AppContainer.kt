@@ -72,6 +72,11 @@ class AppContainer(context: Context) {
 
     /** Last saved stock result, shared by the detail and home screens; dropped when the session ends. */
     val resultBanner = ResultBannerStore()
+    /**
+     * True once the server said this tablet is not a registered station (station_invalid). The guardian
+     * home then shows the "invalid" screen. Reset when the station info is cleared.
+     */
+    val stationInvalid = MutableStateFlow(false)
     private val _serverKey = MutableStateFlow<Any?>(null)
     val connection = ConnectionMonitor(scope, serverKey = _serverKey) { auth.ping() }
 
@@ -84,6 +89,7 @@ class AppContainer(context: Context) {
 
     init {
         scope.launch { session.state.collect { if (it == null) resultBanner.clear() } }
+        scope.launch { stationStore.config.collect { if (it == null) stationInvalid.value = false } }
         scope.launch {
             serverConfigStore.config.collect { config ->
                 if (overridden) return@collect

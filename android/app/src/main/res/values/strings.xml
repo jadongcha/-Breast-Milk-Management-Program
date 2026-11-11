@@ -116,4 +116,10 @@
     <string name="station_inactive">중지</string>
     <string name="station_deactivate">사용 중지</string>
     <string name="station_deactivate_confirm">"'%1$s' 제출처를 사용 중지합니다. 다시 켤 수 없고, 다시 쓰려면 새로 등록해야 합니다"</string>
+    <string name="guardian_station_header">제출처 태블릿 · %1$s</string>
+    <string name="station_invalid_message">등록된 제출처 기기가 아닙니다. 직원에게 알려 주세요</string>
+    <string name="station_release_title">제출처 모드 해제 (관리자)</string>
+    <string name="station_release_admin_only">관리자만 해제할 수 있습니다</string>
+    <string name="station_release_button">제출처 모드 해제</string>
+    <string name="station_release_offline">서버에 연결된 뒤 다시 시도해 주세요</string>
 </resources>

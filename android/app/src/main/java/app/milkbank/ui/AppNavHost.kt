@@ -3,6 +3,7 @@ package app.milkbank.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import app.milkbank.ui.guardian.GuardianHomeRoute
 import app.milkbank.ui.station.StationsScreen
 import app.milkbank.ui.station.StationsViewModel
 import androidx.compose.ui.Modifier
@@ -145,8 +146,8 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             StationsScreen(vm, onBack = { navController.popBackStack() })
         }
         composable<GuardianHome> {
-            // Placeholder: the guardian screens arrive in the next tasks.
-            Box(Modifier.fillMaxSize())
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            GuardianHomeRoute(container)
         }
     }
 }

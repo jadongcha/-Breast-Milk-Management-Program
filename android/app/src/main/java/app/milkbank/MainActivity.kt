@@ -58,12 +58,15 @@ import app.milkbank.ui.permission.rememberLocalNetworkPermission
 import app.milkbank.ui.permission.shouldRequestAtStart
 import app.milkbank.ui.needsLoginRedirect
 import app.milkbank.ui.startDestination
+import app.milkbank.ui.stationModeRedirect
+import app.milkbank.ui.stationReleased
+import app.milkbank.station.StationConfig
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Wrapper so "not loaded yet" differs from "loaded, no server registered". */
-private class LoadedConfig(val config: ServerConfig?)
+/** Both stored configs, read: "not loaded yet" (null holder) differs from "loaded, nothing registered". */
+private class LoadedConfig(val config: ServerConfig?, val station: StationConfig?)
 
 class MainActivity : ComponentActivity() {
     private val container get() = (application as MilkbankApp).container
@@ -124,8 +127,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun AppRoot() {
-        val loaded by remember { container.serverConfigStore.config.map { LoadedConfig(it) } }
-            .collectAsStateWithLifecycle(initialValue = null)
+        // Wait for both: station mode decides the start screen (no flash of Login/Patients on a station tablet).
+        val loaded by remember {
+            combine(container.serverConfigStore.config, container.stationStore.config) { c, st -> LoadedConfig(c, st) }
+        }.collectAsStateWithLifecycle(initialValue = null)
         val current = loaded
         if (current == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -142,7 +147,9 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         val loginAgain = stringResource(R.string.login_again)
         // Decided once, after the stored config has been read.
-        val start = remember { startDestination(current.config, sessionState) }
+        val start = remember { startDestination(current.config, sessionState, current.station) }
+        // A station tablet shows the guardian screen only (needs a registered server to be meaningful).
+        val stationMode = current.station != null && current.config != null
 
         var previousConfig by remember { mutableStateOf(current.config) }
         LaunchedEffect(current.config) {
@@ -156,8 +163,21 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(sessionState) {
             if (sessionState != null) session.consumeLogoutReason()
         }
+        // Station released (admin dialog): back to the login screen with a clean stack.
+        var previousStation by remember { mutableStateOf(current.station) }
+        LaunchedEffect(current.station) {
+            if (stationReleased(previousStation, current.station, current.config != null)) {
+                navController.navigateClearingStack(Login)
+            }
+            previousStation = current.station
+        }
         LaunchedEffect(logoutReason) {
             val reason = logoutReason ?: return@LaunchedEffect
+            // Station mode never shows Login (the admin session lives inside the release dialog only).
+            if (stationMode) {
+                session.consumeLogoutReason()
+                return@LaunchedEffect
+            }
             navController.navigateClearingStack(Login)
             session.consumeLogoutReason()
             if (reason == LogoutReason.EXPIRED || reason == LogoutReason.IDLE) {
@@ -168,16 +188,20 @@ class MainActivity : ComponentActivity() {
         val backStackEntry by navController.currentBackStackEntryAsState()
         val destination = backStackEntry?.destination
         val routeIsPublic = destination == null ||
-            destination.hasRoute<Register>() || destination.hasRoute<Login>() ||
-            destination.hasRoute<GuardianHome>()
-        LaunchedEffect(sessionState, routeIsPublic, current.config) {
-            if (needsLoginRedirect(sessionState, current.config != null, routeIsPublic)) {
+            destination.hasRoute<Register>() || destination.hasRoute<Login>()
+        val routeIsGuardian = destination == null || destination.hasRoute<GuardianHome>()
+        LaunchedEffect(sessionState, routeIsPublic, current.config, stationMode) {
+            if (!stationMode && needsLoginRedirect(sessionState, current.config != null, routeIsPublic)) {
                 navController.navigateClearingStack(Login)
             }
         }
-        LaunchedEffect(passwordRequired) {
+        // Also after process death: a restored staff back stack on a station tablet goes to the guardian screen.
+        LaunchedEffect(stationMode, routeIsGuardian) {
+            if (stationModeRedirect(stationMode, routeIsGuardian)) navController.navigateClearingStack(GuardianHome)
+        }
+        LaunchedEffect(passwordRequired, stationMode) {
             if (passwordRequired) {
-                navController.navigateClearingStack(Password)
+                if (!stationMode) navController.navigateClearingStack(Password)
                 session.consumePasswordRequired()
             }
         }

@@ -2,6 +2,7 @@ package app.milkbank.ui
 
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.Session
+import app.milkbank.station.StationConfig
 import kotlinx.serialization.Serializable
 
 sealed interface Route
@@ -20,8 +21,9 @@ sealed interface Route
 fun configClearedNeedsRegister(previous: ServerConfig?, current: ServerConfig?): Boolean =
     previous != null && current == null
 
-fun startDestination(config: ServerConfig?, session: Session?): Route = when {
+fun startDestination(config: ServerConfig?, session: Session?, station: StationConfig?): Route = when {
     config == null -> Register
+    station != null -> GuardianHome
     session == null -> Login
     session.staff.mustChangePassword -> Password
     else -> Patients
@@ -33,3 +35,14 @@ fun startDestination(config: ServerConfig?, session: Session?): Route = when {
  */
 fun needsLoginRedirect(session: Session?, hasConfig: Boolean, routeIsPublic: Boolean): Boolean =
     hasConfig && session == null && !routeIsPublic
+
+/**
+ * Station mode shows the guardian screen only: any other route (also a restored back stack after process
+ * death) goes to GuardianHome, clearing the stack. In station mode the login redirect is not applied.
+ */
+fun stationModeRedirect(stationMode: Boolean, routeIsGuardian: Boolean): Boolean =
+    stationMode && !routeIsGuardian
+
+/** True when station mode was just released (station info gone) while a server is still registered. */
+fun stationReleased(previous: StationConfig?, current: StationConfig?, hasConfig: Boolean): Boolean =
+    previous != null && current == null && hasConfig
