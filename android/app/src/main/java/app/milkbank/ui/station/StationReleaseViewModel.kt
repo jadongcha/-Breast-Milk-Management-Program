@@ -32,15 +32,17 @@ class StationReleaseViewModel(
     private val stations: () -> StationRepository,
     private val store: StationStore,
     private val session: SessionManager,
-    private val adminOnlyMessage: String = "",
-    private val offlineMessage: String = "",
-    private val unexpectedError: String = "",
+    private val adminOnlyMessage: String,
+    private val offlineMessage: String,
+    private val unexpectedError: String,
     private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow<ReleaseState>(ReleaseState.Login())
     val state: StateFlow<ReleaseState> = _state.asStateFlow()
 
     init {
+        // A new dialog always starts at the login step: a staff session left over from an earlier dialog is ended.
+        if (session.state.value != null) auth().logout()
         // The admin session can end under us (idle logout, expired token): sign in again.
         viewModelScope.launch {
             session.state.collect { s ->
@@ -88,6 +90,10 @@ class StationReleaseViewModel(
     fun release(token: String, stationInvalid: Boolean) {
         val cur = _state.value
         if (cur != ReleaseState.Ready && cur !is ReleaseState.Error) return
+        if (session.state.value == null) { // no admin signed in (any more): sign in first
+            _state.value = ReleaseState.Login()
+            return
+        }
         if (!_state.compareAndSet(cur, ReleaseState.Releasing)) return
         viewModelScope.launch {
             try {
@@ -111,6 +117,11 @@ class StationReleaseViewModel(
                 _state.value = ReleaseState.Error(unexpectedError)
             }
         }
+    }
+
+    /** The admin session never outlives the dialog, even if the screen is torn down without a cancel. */
+    override fun onCleared() {
+        if (session.state.value != null) auth().logout()
     }
 
     /** Closes the dialog: the admin session ends with it. */

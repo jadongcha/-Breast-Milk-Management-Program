@@ -207,4 +207,34 @@ class StationReleaseViewModelTest {
         session.end(LogoutReason.IDLE)
         assertEquals(ReleaseState.Login(null), vm.state.value)
     }
+
+    @Test fun newViewModel_afterPreviousReady_startsAtLoginAndEndsStaleSession() = runBlocking {
+        val old = readyVm()
+        assertEquals(ReleaseState.Ready, old.state.value)
+        val fresh = vm()
+        assertEquals(ReleaseState.Login(), fresh.state.value)
+        assertNull(session.state.value)
+        fresh.release("tok-1", stationInvalid = true) // cannot release without signing in
+        assertEquals(0, stations.releaseCalls)
+        assertEquals(station, store.config.first())
+    }
+
+    @Test fun release_withoutSession_returnsToLogin() = runBlocking {
+        val vm = readyVm()
+        stations.releaseHandler = { ApiResult.Err(ApiError(null, "net")) }
+        vm.release("tok-1", stationInvalid = false) // -> Error, session kept
+        vm.awaitSettled()
+        session.end(LogoutReason.IDLE)
+        vm.release("tok-1", stationInvalid = true)
+        assertEquals(ReleaseState.Login(), vm.state.value)
+        assertEquals(1, stations.releaseCalls)
+        assertEquals(station, store.config.first())
+    }
+
+    @Test fun dismissInReady_logsOutAdmin() = runBlocking {
+        val vm = readyVm()
+        vm.cancel() // what the dialog's dismiss/cancel calls
+        assertNull(session.state.value)
+        assertEquals(1, fakeAuth.logoutCalls)
+    }
 }

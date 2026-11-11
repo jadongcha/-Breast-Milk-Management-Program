@@ -50,4 +50,11 @@ class GuardianHomeGateTest {
         assertNull(GuardianHomeGate({ repo }, invalid).check("tok"))
         assertEquals(false, invalid.value)
     }
+
+    @Test fun staffSessionBackstop() {
+        assertEquals(true, shouldDropStaffSession(true, releaseDialogOpen = false, hasSession = true))
+        assertEquals(false, shouldDropStaffSession(true, releaseDialogOpen = true, hasSession = true))
+        assertEquals(false, shouldDropStaffSession(true, releaseDialogOpen = false, hasSession = false))
+        assertEquals(false, shouldDropStaffSession(false, releaseDialogOpen = false, hasSession = true))
+    }
 }

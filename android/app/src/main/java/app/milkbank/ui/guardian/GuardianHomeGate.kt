@@ -22,3 +22,7 @@ class GuardianHomeGate(
         }
     }
 }
+
+/** Backstop: in station mode a staff session may exist only while the release dialog is open. */
+fun shouldDropStaffSession(stationMode: Boolean, releaseDialogOpen: Boolean, hasSession: Boolean): Boolean =
+    stationMode && !releaseDialogOpen && hasSession

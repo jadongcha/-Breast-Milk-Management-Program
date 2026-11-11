@@ -37,7 +37,6 @@ import app.milkbank.R
 import app.milkbank.ui.logUnexpected
 import app.milkbank.ui.station.StationReleaseDialog
 import app.milkbank.ui.station.StationReleaseViewModel
-import kotlinx.coroutines.withTimeoutOrNull
 
 private const val RELEASE_HOLD_MS = 3000L
 
@@ -62,8 +61,13 @@ fun GuardianHomeRoute(container: AppContainer) {
         }
     }
 
-    var releaseOpen by remember { mutableStateOf(false) }
-    var releaseRun by remember { mutableIntStateOf(0) }
+    // Saveable: a rotation brings the dialog back together with its ViewModel instead of orphaning the admin session.
+    var releaseOpen by rememberSaveable { mutableStateOf(false) }
+    var releaseRun by rememberSaveable { mutableIntStateOf(0) }
+    val staffSession by container.session.state.collectAsStateWithLifecycle()
+    LaunchedEffect(releaseOpen, staffSession) {
+        if (shouldDropStaffSession(true, releaseOpen, staffSession != null)) container.auth.logout()
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp)) {
