@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     container.idleWatcher.check()
+                    container.guardianIdle.check()
                     delay(1000)
                 }
             }
@@ -108,6 +109,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         container.idleWatcher.check()
+        container.guardianIdle.check()
     }
 
     override fun onStop() {
@@ -117,11 +119,13 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         container.idleWatcher.touch()
+        container.guardianIdle.touch()
         return super.dispatchKeyEvent(event)
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         container.idleWatcher.touch()
+        container.guardianIdle.touch()
         return super.dispatchTouchEvent(ev)
     }
 
@@ -220,7 +224,7 @@ class MainActivity : ComponentActivity() {
 
         CompositionLocalProvider(
             LocalOnline provides online,
-            LocalIdleTouch provides { container.idleWatcher.touch() },
+            LocalIdleTouch provides { container.idleWatcher.touch(); container.guardianIdle.touch() },
         ) {
             // One place for the system bars / camera cutout: banners and screens below never draw under them.
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).idleTouch()) {

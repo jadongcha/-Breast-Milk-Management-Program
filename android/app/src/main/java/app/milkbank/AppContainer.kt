@@ -31,6 +31,7 @@ import app.milkbank.session.ConnectionMonitor
 import app.milkbank.session.IdleWatcher
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import app.milkbank.station.GuardianIdle
 import app.milkbank.station.KeystoreTokenCipher
 import app.milkbank.station.StationStore
 import app.milkbank.ui.patients.ResultBannerStore
@@ -69,6 +70,9 @@ class AppContainer(context: Context) {
     val stationStore = StationStore(appContext.stationDataStore, KeystoreTokenCipher())
     val session = SessionManager(SystemClock)
     val idleWatcher = IdleWatcher(ElapsedClock, session)
+
+    /** 60-second guardian inactivity timer for the station tablet; touched and checked by MainActivity. */
+    val guardianIdle = GuardianIdle(ElapsedClock)
 
     /** Last saved stock result, shared by the detail and home screens; dropped when the session ends. */
     val resultBanner = ResultBannerStore()

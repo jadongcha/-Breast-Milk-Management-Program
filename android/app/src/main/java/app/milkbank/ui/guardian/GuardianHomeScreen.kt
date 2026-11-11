@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,7 +41,7 @@ import app.milkbank.ui.station.StationReleaseViewModel
 
 private const val RELEASE_HOLD_MS = 3000L
 
-/** Station tablet home. Task 5 fills in the guardian flow; this is the frame: header, hidden release area, invalid screen. */
+/** Station tablet home. header, hidden release area, invalid screen, guardian flow. */
 @Composable
 fun GuardianHomeRoute(container: AppContainer) {
     val station by container.stationStore.config.collectAsStateWithLifecycle(initialValue = null)
@@ -60,6 +61,22 @@ fun GuardianHomeRoute(container: AppContainer) {
             gate.check(config.token)?.let { serverName = it }
         }
     }
+
+    // Guardian session state (token, step, inputs) lives in this ViewModel only: memory, never saved.
+    val submitUncertain = stringResource(R.string.guardian_submit_uncertain)
+    val unexpectedText = stringResource(R.string.network_error)
+    val currentToken by rememberUpdatedState(config.token)
+    val guardianVm: GuardianViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                GuardianViewModel(
+                    { container.guardian }, { currentToken }, container.guardianIdle,
+                    { container.stationInvalid.value = true },
+                    submitUncertain, unexpectedText, logUnexpected("guardian flow failed"),
+                )
+            }
+        },
+    )
 
     // Saveable: a rotation brings the dialog back together with its ViewModel instead of orphaning the admin session.
     var releaseOpen by rememberSaveable { mutableStateOf(false) }
@@ -85,8 +102,9 @@ fun GuardianHomeRoute(container: AppContainer) {
                         textAlign = TextAlign.Center,
                     )
                 }
+            } else {
+                GuardianFlow(guardianVm)
             }
-            // Task 5: the guardian flow goes here when the station is valid.
         }
         // Hidden admin area: no visible hint.
         Box(
