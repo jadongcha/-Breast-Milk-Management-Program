@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -163,7 +164,7 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                         } else {
                             key(id) { // dialog/snackbar state must not carry over between babies
                                 val detailVm = rememberDetailViewModel(container, id)
-                                LaunchedEffect(id) { detailVm.refresh() }
+                                LifecycleResumeEffect(id) { detailVm.refresh(); onPauseOrDispose { } }
                                 PatientDetailScreen(
                                     detailVm,
                                     onEdit = if (isAdmin) { pid: Int -> navController.navigate(PatientForm(pid)) } else null,
@@ -186,7 +187,7 @@ fun PatientDetailRoute(container: AppContainer, id: Int, navController: NavHostC
     val vm = rememberDetailViewModel(container, id)
     val session by container.session.state.collectAsStateWithLifecycle()
     val isAdmin = session?.staff?.role == "admin"
-    LaunchedEffect(id) { vm.refresh() }
+    LifecycleResumeEffect(id) { vm.refresh(); onPauseOrDispose { } }
     Scaffold(
         topBar = {
             TopAppBar(

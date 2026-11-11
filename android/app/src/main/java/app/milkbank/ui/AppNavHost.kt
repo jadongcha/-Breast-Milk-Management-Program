@@ -1,10 +1,6 @@
 package app.milkbank.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -17,6 +13,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import app.milkbank.MilkbankApp
 import app.milkbank.R
+import app.milkbank.core.SystemClock
+import app.milkbank.ui.admin.PatientFormScreen
+import app.milkbank.ui.admin.PatientFormViewModel
+import app.milkbank.ui.admin.StaffScreen
+import app.milkbank.ui.admin.StaffViewModel
 import app.milkbank.ui.login.LoginScreen
 import app.milkbank.ui.login.LoginViewModel
 import app.milkbank.ui.login.PasswordScreen
@@ -98,12 +99,32 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
             PatientDetailRoute(container, entry.toRoute<PatientDetail>().id, navController)
         }
-        composable<PatientForm> { Placeholder("PatientForm") }
-        composable<Staff> { Placeholder("Staff") }
+        composable<PatientForm> { entry ->
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            val id = entry.toRoute<PatientForm>().id
+            val unexpected = stringResource(R.string.network_error)
+            val vm: PatientFormViewModel = viewModel(
+                key = "patient-form-$id",
+                factory = viewModelFactory {
+                    initializer {
+                        PatientFormViewModel(id, { container.patients }, container.resultBanner, SystemClock, unexpected)
+                    }
+                },
+            )
+            PatientFormScreen(
+                vm,
+                editing = id != null,
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<Staff> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            val unexpected = stringResource(R.string.network_error)
+            val vm: StaffViewModel = viewModel(
+                factory = viewModelFactory { initializer { StaffViewModel({ container.staff }, unexpected) } },
+            )
+            StaffScreen(vm, onBack = { navController.popBackStack() })
+        }
     }
-}
-
-@Composable
-private fun Placeholder(name: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(name) }
 }

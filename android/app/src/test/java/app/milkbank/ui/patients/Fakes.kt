@@ -37,13 +37,17 @@ fun detailDto(id: Int = 7, regNo: String = "DEMO-1", balance: Int = 5, records: 
 class FakePatientRepository : PatientRepository {
     var listHandler: suspend (String?) -> ApiResult<List<PatientDto>> = { ApiResult.Ok(emptyList()) }
     var detailHandler: suspend (Int) -> ApiResult<PatientDetailDto> = { ApiResult.Ok(detailDto(it)) }
+    var createHandler: suspend (PatientForm) -> ApiResult<PatientDto> = { ApiResult.Ok(patientDto(1, it.regNo)) }
+    var updateHandler: suspend (Int, PatientForm) -> ApiResult<PatientDto> = { id, f -> ApiResult.Ok(patientDto(id, f.regNo)) }
+    val createdForms = mutableListOf<PatientForm>()
+    val updatedForms = mutableListOf<Pair<Int, PatientForm>>()
     var listCalls = 0
     var detailCalls = 0
 
     override suspend fun list(q: String?): ApiResult<List<PatientDto>> { listCalls++; return listHandler(q) }
     override suspend fun detail(id: Int): ApiResult<PatientDetailDto> { detailCalls++; return detailHandler(id) }
-    override suspend fun create(form: PatientForm): ApiResult<PatientDto> = error("unused")
-    override suspend fun update(id: Int, form: PatientForm): ApiResult<PatientDto> = error("unused")
+    override suspend fun create(form: PatientForm): ApiResult<PatientDto> { createdForms += form; return createHandler(form) }
+    override suspend fun update(id: Int, form: PatientForm): ApiResult<PatientDto> { updatedForms += id to form; return updateHandler(id, form) }
 }
 
 class FakeStockRepository : StockRepository {
