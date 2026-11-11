@@ -38,9 +38,12 @@ def test_new_db_is_at_head(tmp_path, clock):
     eng = make_engine(path)
     try:
         assert migrate(eng, path, clock.now()) is None
-        assert _version(eng) == "0001"
+        assert _version(eng) == "0002"
         tables = set(inspect(eng).get_table_names())
-        assert {"staff", "auth_session", "patient", "stock_record", "login_attempt"} <= tables
+        assert {
+            "staff", "auth_session", "patient", "stock_record", "login_attempt",
+            "station", "submission", "guardian_session",
+        } <= tables
     finally:
         eng.dispose()
 
@@ -79,8 +82,8 @@ def test_pending_upgrade_makes_backup(tmp_path, clock):
             conn.commit()
         backup = migrate(eng, path, clock.now())
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0001.db"
-        assert _version(eng) == "0001"
+        assert backup.name == "milkbank-20261110T000000Z-before-0002.db"
+        assert _version(eng) == "0002"
     finally:
         eng.dispose()
 
@@ -219,6 +222,7 @@ def test_schema_sql_identical_to_create_all(tmp_path, clock):
         assert not _diff(s1, s2), {k: (s1[k], s2[k]) for k in s1 if s1[k] != s2[k]}
         assert ("index", "ux_stock_record_cancel_target", "stock_record") in s2
         assert "WHERE kind = 'cancel'" in s2[("index", "ux_stock_record_cancel_target", "stock_record")]
+        assert "WHERE active = 1" in s2[("index", "uq_station_active_name", "station")]
     finally:
         e1.dispose()
         e2.dispose()
@@ -329,3 +333,61 @@ def test_backup_goes_to_config_backups_dir(tmp_path, clock):
         assert backup.parent == Config(db_path=path).backups_dir
     finally:
         eng.dispose()
+
+
+def test_upgrade_0001_with_data_to_0002(tmp_path, clock):
+    path = tmp_path / "u2.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            command.upgrade(_alembic_config(conn), "0001")
+            conn.commit()
+            conn.execute(
+                text(
+                    "INSERT INTO staff (username, name, role, password_hash,"
+                    " must_change_password, active, created_at)"
+                    " VALUES ('a', 'a', 'admin', 'h', 0, 1, '2026-11-10 00:00:00')"
+                )
+            )
+            conn.commit()
+        assert _version(eng) == "0001"
+        backup = migrate(eng, path, clock.now())
+        assert _version(eng) == "0002"
+        assert backup is not None and backup.exists()
+        assert backup.name == "milkbank-20261110T000000Z-before-0002.db"
+        with eng.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM staff")).scalar() == 1
+        assert {"station", "submission", "guardian_session"} <= set(
+            inspect(eng).get_table_names()
+        )
+    finally:
+        eng.dispose()
+
+
+def test_station_name_unique_only_among_active(engine):
+    def add(name, active):
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO station (name, token_hash, active, created_at, created_by)"
+                    " VALUES (:n, :t, :a, '2026-11-10 00:00:00', 1)"
+                ),
+                {"n": name, "t": f"t-{name}-{active}-{add.i}", "a": active},
+            )
+            add.i += 1
+
+    add.i = 0
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO staff (username, name, role, password_hash,"
+                " must_change_password, active, created_at)"
+                " VALUES ('a', 'a', 'admin', 'h', 0, 1, '2026-11-10 00:00:00')"
+            )
+        )
+    add("A동", 1)
+    with pytest.raises(IntegrityError):
+        add("A동", 1)
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE station SET active = 0 WHERE name = 'A동'"))
+    add("A동", 1)

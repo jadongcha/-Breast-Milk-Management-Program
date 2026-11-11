@@ -58,6 +58,17 @@ class AlertState(StrEnum):
     ALERTED = "alerted"
 
 
+class SubmissionStatus(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
+class RejectReason(StrEnum):
+    NOT_RECEIVED = "not_received"
+    OTHER = "other"
+
+
 def _enum_type(enum_cls: type[StrEnum]) -> Enum:
     # 이름이 아니라 값 문자열("in", "admitted" ...)을 저장한다.
     return Enum(
@@ -148,3 +159,59 @@ class LoginAttempt(Base):
     failed_count: Mapped[int] = mapped_column(default=0)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_failed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Station(Base):
+    __tablename__ = "station"
+
+    # 사용 중인 제출처끼리만 이름 중복 불가. 사용 중지한 이름은 다시 쓸 수 있다.
+    __table_args__ = (
+        Index(
+            "uq_station_active_name",
+            "name",
+            unique=True,
+            sqlite_where=text("active = 1"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    token_hash: Mapped[str] = mapped_column(unique=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    created_by: Mapped[int] = mapped_column(ForeignKey("staff.id"))
+
+
+class Submission(Base):
+    __tablename__ = "submission"
+
+    __table_args__ = (
+        Index("ix_submission_status_submitted_at", "status", "submitted_at"),
+        Index("ix_submission_patient_id_status", "patient_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
+    station_id: Mapped[int] = mapped_column(ForeignKey("station.id"))
+    count: Mapped[int]
+    submitted_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    status: Mapped[SubmissionStatus] = mapped_column(
+        _enum_type(SubmissionStatus), default=SubmissionStatus.PENDING
+    )
+    confirmed_count: Mapped[int | None]
+    handled_by: Mapped[int | None] = mapped_column(ForeignKey("staff.id"))
+    handled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    intake_record_id: Mapped[int | None] = mapped_column(ForeignKey("stock_record.id"))
+    reject_reason: Mapped[RejectReason | None] = mapped_column(_enum_type(RejectReason))
+    memo: Mapped[str | None]
+
+
+class GuardianSession(Base):
+    __tablename__ = "guardian_session"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(unique=True)
+    phone: Mapped[str]
+    station_id: Mapped[int] = mapped_column(ForeignKey("station.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
