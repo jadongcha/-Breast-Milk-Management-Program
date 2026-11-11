@@ -16,7 +16,7 @@ NICU 모유 재고 관리 앱. 간호사·관리자가 입고 확인, 사용, �
 export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
 ./gradlew assembleDebug          # 앱 만들기 → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew testDebugUnitTest      # JVM 시험
-./gradlew connectedDebugAndroidTest   # 기기/에뮬레이터 화면 시험 (기기 연결 필요)
+./gradlew connectedDebugAndroidTest   # 기기/에뮬레이터 화면 시험 (기기 연결 필요; 권한은 자동 허용해 설치)
 ```
 
 PowerShell에서는 `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"` 후 `.\gradlew.bat assembleDebug`.
@@ -82,6 +82,15 @@ adb push qr.txt /sdcard/Android/data/app.milkbank/files/qr.txt
 ```
 
 (Git Bash에서는 `/sdcard/...` 경로가 바뀌지 않도록 명령 앞에 `MSYS_NO_PATHCONV=1`을 붙인다.) 그다음 버튼을 누르면 등록된다.
+
+## 제출처 모드 (보호자 화면)
+
+신생아실 입구의 태블릿을 보호자용 제출처로 쓸 수 있다.
+
+- **켜기**: 관리자로 로그인 → 더보기 메뉴 → "이 기기를 제출처로 사용" → 제출처 이름 입력 → 확인. 이후 이 기기에서는 보호자 화면만 보인다. 제출처 토큰은 기기 Keystore로 암호화해 저장한다.
+- **보호자 화면**: 보호자 전화번호와 아기 ID를 넣으면 "현재 확인된 냉동 모유"가 보이고, "가져온 모유 입력"에서 팩 수를 눌러 제출한다. 화면에는 아기 이름 없이 아기 ID만 보인다. 마지막 조작 60초 뒤에 자동으로 처음 화면으로 돌아가고 입력이 지워진다.
+- **해제**: 보호자 화면 왼쪽 위 모서리를 3초 길게 누르면 관리자 로그인 창이 열린다. 관리자만 해제할 수 있고, 서버에 연결돼 있어야 한다. 해제하면 로그인 화면으로 돌아간다.
+- **입고 확인 대기**: 간호사·관리자 홈 위쪽 표에 보호자가 제출한 건이 쌓인다. "수량 확인"에서 실제 받은 팩 수를 확인하면 재고에 입고로 반영되고, "반려"는 사유를 남긴다. 제출처 관리(관리자 메뉴)에서 제출처를 사용 중지할 수 있다.
 
 ## 권한
 

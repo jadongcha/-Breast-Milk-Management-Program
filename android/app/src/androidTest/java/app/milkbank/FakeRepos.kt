@@ -7,6 +7,7 @@ import app.milkbank.api.GuardianSubmitResponse
 import app.milkbank.api.PendingDto
 import app.milkbank.api.RejectResponse
 import app.milkbank.api.StationCreateResponse
+import app.milkbank.api.SubmissionBriefDto
 import app.milkbank.api.StationDto
 import app.milkbank.api.StationSelfDto
 import app.milkbank.data.GuardianRepository
@@ -35,6 +36,8 @@ import java.time.Instant
 
 const val FAKE_BABY_NAME = "가짜아기이름"
 const val FAKE_REG_NO = "DEMO-10"
+const val FAKE_STATION_NAME = "Station 1"
+const val FAKE_GUARDIAN_PHONE = "01012345678"
 const val FAKE_USERNAME = "nurse1"
 const val FAKE_PASSWORD = "test-pass-1"
 
@@ -45,6 +48,7 @@ val fakeNurse = StaffDto(
 /** One patient whose balance the fake stock repository updates; shared by the fake repositories. */
 class FakeWorld {
     @Volatile var balance = 0
+    @Volatile var pending = 0
     val records = mutableListOf<RecordDto>()
 
     fun patient() = PatientDto(
@@ -124,19 +128,33 @@ class FakeStations : StationRepository {
     override suspend fun create(name: String): ApiResult<StationCreateResponse> = ApiResult.Err(unsupported)
     override suspend fun list(): ApiResult<List<StationDto>> = ApiResult.Ok(emptyList())
     override suspend fun deactivate(id: Int): ApiResult<StationDto> = ApiResult.Err(unsupported)
-    override suspend fun self(stationToken: String): ApiResult<StationSelfDto> = ApiResult.Err(unsupported)
+    override suspend fun self(stationToken: String): ApiResult<StationSelfDto> =
+        ApiResult.Ok(StationSelfDto(1, FAKE_STATION_NAME))
     override suspend fun releaseSelf(stationToken: String): ApiResult<Unit> = ApiResult.Ok(Unit)
 }
 
-class FakeGuardian : GuardianRepository {
+class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
+    private fun baby() = BabyDto(10, FAKE_REG_NO, world?.balance ?: 0, world?.pending ?: 0)
+
     override suspend fun login(stationToken: String, phone: String, babyId: String):
-        ApiResult<GuardianLoginResponse> = ApiResult.Err(unsupported)
+        ApiResult<GuardianLoginResponse> =
+        if (world != null && phone == FAKE_GUARDIAN_PHONE && babyId == FAKE_REG_NO) {
+            ApiResult.Ok(GuardianLoginResponse("fake-guardian-token", listOf(baby())))
+        } else {
+            ApiResult.Err(unsupported)
+        }
 
     override suspend fun babies(stationToken: String, guardianToken: String): ApiResult<List<BabyDto>> =
-        ApiResult.Err(unsupported)
+        if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
 
     override suspend fun submit(stationToken: String, guardianToken: String, patientId: Int, count: Int):
-        ApiResult<GuardianSubmitResponse> = ApiResult.Err(unsupported)
+        ApiResult<GuardianSubmitResponse> {
+        val w = world ?: return ApiResult.Err(unsupported)
+        w.pending += count
+        return ApiResult.Ok(
+            GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.now()), w.balance, w.pending),
+        )
+    }
 
     override fun logout(stationToken: String, guardianToken: String): Job = Job().apply { complete() }
 }
@@ -154,6 +172,6 @@ fun fakeRepositories(session: SessionManager, world: FakeWorld) = Repositories(
     stock = FakeStock(world),
     staff = FakeStaff(),
     stations = FakeStations(),
-    guardian = FakeGuardian(),
+    guardian = FakeGuardian(world),
     submissions = FakeSubmissions(),
 )
