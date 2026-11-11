@@ -51,6 +51,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
 import app.milkbank.ui.IdleAwareDialog
+import app.milkbank.ui.permission.LocalNetworkPermissionNotice
+import app.milkbank.ui.permission.rememberLocalNetworkPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,10 +76,13 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     var permanentlyDenied by remember { mutableStateOf(false) }
+    var cameraAsked by remember { mutableStateOf(granted) }
+    val localNetwork = rememberLocalNetworkPermission()
     var cameraFailed by remember { mutableStateOf(false) }
     var testFileMissing by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
+        cameraAsked = true
         // Denied and the system will not ask again: only the Settings screen can help.
         val activity = context.findActivity()
         permanentlyDenied = !ok && activity != null &&
@@ -95,6 +100,10 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
+    // One system dialog at a time: ask for local network access once the camera question is settled.
+    LaunchedEffect(cameraAsked) {
+        if (cameraAsked && !localNetwork.granted && !localNetwork.askedBefore) localNetwork.request()
+    }
     LaunchedEffect(state) { if (state == RegisterState.Done) onDone() }
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -111,7 +120,7 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
             if (granted) {
                 QrScanner(
                     enabled = state == RegisterState.Scanning,
-                    onQr = viewModel::onScanned,
+                    onQr = { raw -> if (localNetwork.granted) viewModel.onScanned(raw) },
                     onError = { cameraFailed = true },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -165,6 +174,9 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
             }
         }
 
+        // Without the permission the server check would only time out: say why instead.
+        LocalNetworkPermissionNotice(localNetwork, Modifier.padding(0.dp))
+
         (state as? RegisterState.Error)?.let { error ->
             Text(
                 stringResource(error.messageRes),
@@ -187,7 +199,7 @@ fun RegisterScreen(viewModel: RegisterViewModel, onDone: () -> Unit) {
                 )
             }
             OutlinedButton(
-                enabled = state != RegisterState.Checking,
+                enabled = state != RegisterState.Checking && localNetwork.granted,
                 onClick = {
                     scope.launch {
                         val raw = withContext(Dispatchers.IO) { readTestQr(context.getExternalFilesDir(null)) }

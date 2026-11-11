@@ -38,11 +38,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
 import app.milkbank.ui.Route
 import app.milkbank.ui.components.IdleTextField
+import app.milkbank.ui.permission.errorToShow
+import app.milkbank.ui.permission.rememberLocalNetworkPermission
 
 @Composable
 fun LoginScreen(viewModel: LoginViewModel, onNavigate: (Route) -> Unit, onRegisterAgain: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
+    // The permission notice (with its button) sits in the app-wide strip; here only drop the misleading network error.
+    val permissionMissing = rememberLocalNetworkPermission().missing
 
     LaunchedEffect(state.next) {
         state.next?.let {
@@ -110,7 +114,7 @@ fun LoginScreen(viewModel: LoginViewModel, onNavigate: (Route) -> Unit, onRegist
                 ),
                 keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
             )
-            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            errorToShow(state.error, permissionMissing)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = viewModel::submit,
                 enabled = state.canSubmit,

@@ -100,4 +100,7 @@
     <string name="staff_confirm_activate">%1$s 계정을 활성화하시겠습니까?</string>
     <string name="staff_confirm_reset">%1$s 계정의 비밀번호를 초기화하시겠습니까?</string>
     <string name="temp_password_title">%1$s 임시 비밀번호</string>
+    <string name="local_network_permission_needed">"병원 서버에 연결하려면 '근처 기기(로컬 네트워크)' 권한이 필요합니다"</string>
+    <string name="local_network_permission_request">권한 다시 요청</string>
+    <string name="local_network_permission_settings">설정에서 권한 허용</string>
 </resources>

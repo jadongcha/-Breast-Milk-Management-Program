@@ -43,6 +43,10 @@ import app.milkbank.ui.MilkbankTheme
 import app.milkbank.ui.OfflineBanner
 import app.milkbank.ui.Password
 import app.milkbank.ui.navigateClearingStack
+import app.milkbank.ui.permission.LocalNetworkPermissionNotice
+import app.milkbank.ui.permission.localNetworkPermissionRequired
+import app.milkbank.ui.permission.rememberLocalNetworkPermission
+import app.milkbank.ui.permission.shouldRequestAtStart
 import app.milkbank.ui.needsLoginRedirect
 import app.milkbank.ui.startDestination
 import kotlinx.coroutines.delay
@@ -158,12 +162,28 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // A registered server needs local network access before any contact (also after an OS upgrade or a revoke).
+        val localNetwork = rememberLocalNetworkPermission()
+        LaunchedEffect(current.config != null, localNetwork.granted) {
+            if (shouldRequestAtStart(
+                    required = localNetworkPermissionRequired(android.os.Build.VERSION.SDK_INT),
+                    granted = localNetwork.granted,
+                    serverRegistered = current.config != null,
+                    askedBefore = localNetwork.askedBefore,
+                )
+            ) localNetwork.request()
+        }
+
         CompositionLocalProvider(
             LocalOnline provides online,
             LocalIdleTouch provides { container.idleWatcher.touch() },
         ) {
             Column(Modifier.fillMaxSize().idleTouch()) {
-                if (!online && current.config != null) OfflineBanner() // no server yet: nothing to be offline from
+                // The register screen shows its own notice.
+                if (current.config != null && !destination.let { it != null && it.hasRoute<Register>() }) {
+                    LocalNetworkPermissionNotice(localNetwork)
+                }
+                if (!online && current.config != null && localNetwork.granted) OfflineBanner() // no server yet: nothing to be offline from
                 Box(Modifier.weight(1f)) {
                     AppNavHost(navController, start)
                     SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
