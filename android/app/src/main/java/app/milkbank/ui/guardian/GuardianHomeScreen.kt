@@ -78,6 +78,9 @@ fun GuardianHomeRoute(container: AppContainer) {
         },
     )
 
+    // The gate check can flag the station invalid mid-session: drop the guardian token and inputs right away.
+    LaunchedEffect(invalid) { if (invalid) guardianVm.finish() }
+
     // Saveable: a rotation brings the dialog back together with its ViewModel instead of orphaning the admin session.
     var releaseOpen by rememberSaveable { mutableStateOf(false) }
     var releaseRun by rememberSaveable { mutableIntStateOf(0) }

@@ -214,6 +214,34 @@ class GuardianViewModelTest {
         assertTrue(repo.logouts.isEmpty())
     }
 
+    @Test fun login_stationInvalid_callsCallbackAndResets() {
+        val vm = vm()
+        repo.loginHandler = { ApiResult.Err(ApiError(401, "x", "station_invalid")) }
+        vm.onPhone("010")
+        vm.onBabyId("DEMO-01")
+        vm.login()
+        assertEquals(1, invalidCalls)
+        assertEquals(start, vm.step.value)
+    }
+
+    @Test fun afterIdle_tokenIsGone_submitMakesNoCall() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        clock.advance(Duration.ofSeconds(60))
+        idle.check()
+        vm.submit()
+        assertEquals(0, repo.submitCalls)
+    }
+
+    @Test fun login_emptyBabies_logsOutServerToken() {
+        val vm = vm()
+        login(vm, emptyList())
+        assertEquals(listOf("st" to "gt"), repo.logouts)
+        assertEquals("오류", (vm.step.value as GuardianStep.Start).error)
+    }
+
     @Test fun pickCount_outOfRange_ignored() {
         val vm = vm()
         login(vm)

@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,7 +101,9 @@ private fun StartStep(s: GuardianStep.Start, vm: GuardianViewModel, online: Bool
         label = stringResource(R.string.guardian_phone_label),
         modifier = Modifier.fillMaxWidth(),
         enabled = !s.submitting,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+        // NumberPassword: digit pad that IMEs treat as incognito (no learning, no suggestions) - the next parent must not see this number.
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next),
+        textStyle = MaterialTheme.typography.titleLarge,
     )
     IdleTextField(
         value = s.babyId,
@@ -108,7 +111,10 @@ private fun StartStep(s: GuardianStep.Start, vm: GuardianViewModel, online: Bool
         label = stringResource(R.string.guardian_baby_id_label),
         modifier = Modifier.fillMaxWidth(),
         enabled = !s.submitting,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        // Password type (text still visible): Gboard and others do not learn or suggest from it, so the next parent never sees this ID.
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+        visualTransformation = VisualTransformation.None,
+        textStyle = MaterialTheme.typography.titleLarge,
         keyboardActions = KeyboardActions(onDone = { if (canLogin) vm.login() }),
     )
     s.error?.let {

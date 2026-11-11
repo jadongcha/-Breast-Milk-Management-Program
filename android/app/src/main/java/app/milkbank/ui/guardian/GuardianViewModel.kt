@@ -64,13 +64,22 @@ class GuardianViewModel(
 
     fun finish() = reset()
 
+    override fun onCleared() {
+        // Cleared mid-session (e.g. admin release): do not leave the guardian token valid on the server.
+        val t = token
+        val st = stationToken()
+        token = null
+        idle.disarm()
+        if (t != null && st != null) guardian().logout(st, t)
+    }
+
     private fun startStep(): GuardianStep.Start? = _step.value as? GuardianStep.Start
 
     fun onPhone(s: String) {
         val cur = startStep() ?: return
         if (cur.submitting) return
         idle.arm()
-        _step.value = cur.copy(phone = s.filter { it.isDigit() || it == '-' || it == '+' }.take(20), error = null)
+        _step.value = cur.copy(phone = s.filter { it.isDigit() }.take(20), error = null)
     }
 
     fun onBabyId(s: String) {
@@ -97,6 +106,7 @@ class GuardianViewModel(
                     is ApiResult.Ok -> {
                         val babies = r.value.babies
                         if (babies.isEmpty()) {
+                            guardian().logout(st, r.value.token)
                             _step.value = cur.copy(error = unexpected, submitting = false)
                             return@launch
                         }
