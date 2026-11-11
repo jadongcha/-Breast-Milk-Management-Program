@@ -31,6 +31,8 @@ import app.milkbank.session.ConnectionMonitor
 import app.milkbank.session.IdleWatcher
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import app.milkbank.station.KeystoreTokenCipher
+import app.milkbank.station.StationStore
 import app.milkbank.ui.patients.ResultBannerStore
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private val Context.serverDataStore by preferencesDataStore(name = "server")
+private val Context.stationDataStore by preferencesDataStore(name = "station")
 
 /** The repositories bound to the current server config. Fakeable as a whole. */
 class Repositories(
@@ -63,6 +66,7 @@ class AppContainer(context: Context) {
     private val debuggable = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     val serverConfigStore = ServerConfigStore(appContext.serverDataStore)
+    val stationStore = StationStore(appContext.stationDataStore, KeystoreTokenCipher())
     val session = SessionManager(SystemClock)
     val idleWatcher = IdleWatcher(ElapsedClock, session)
 
@@ -90,6 +94,8 @@ class AppContainer(context: Context) {
 
     private fun applyConfig(config: ServerConfig?) {
         if (shouldResetSession(previousConfig, config)) session.end(LogoutReason.USER)
+        // A station token belongs to one server: drop it when the server changes or is cleared.
+        if (config == null || shouldResetSession(previousConfig, config)) scope.launch { stationStore.clear() }
         val oldClient = currentClient
         val client = config?.let {
             HttpClientFactory.okHttp(it, listOf(AuthInterceptor(session)), debuggable)
