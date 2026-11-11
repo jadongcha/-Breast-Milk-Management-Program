@@ -32,6 +32,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private val Context.serverDataStore by preferencesDataStore(name = "server")
@@ -72,22 +73,26 @@ class AppContainer(context: Context) {
         scope.launch {
             serverConfigStore.config.collect { config ->
                 if (overridden) return@collect
-                if (shouldResetSession(previousConfig, config)) session.end(LogoutReason.USER)
-                val oldClient = currentClient
-                val client = config?.let {
-                    HttpClientFactory.okHttp(it, listOf(AuthInterceptor(session)), debuggable)
-                }
-                val api = config?.let { HttpClientFactory.retrofit(it, client!!).create(MilkbankApi::class.java) }
-                currentClient = client
-                previousConfig = config
-                _repositories.value = build(api)
-                // Non-null only once an api exists; a change makes the monitor probe again at once.
-                _serverKey.value = if (config != null) _repositories.value else null
-                oldClient?.let {
-                    it.dispatcher.executorService.shutdown()
-                    it.connectionPool.evictAll()
-                }
+                applyConfig(config)
             }
+        }
+    }
+
+    private fun applyConfig(config: ServerConfig?) {
+        if (shouldResetSession(previousConfig, config)) session.end(LogoutReason.USER)
+        val oldClient = currentClient
+        val client = config?.let {
+            HttpClientFactory.okHttp(it, listOf(AuthInterceptor(session)), debuggable)
+        }
+        val api = config?.let { HttpClientFactory.retrofit(it, client!!).create(MilkbankApi::class.java) }
+        currentClient = client
+        previousConfig = config
+        _repositories.value = build(api)
+        // Non-null only once an api exists; a change makes the monitor probe again at once.
+        _serverKey.value = if (config != null) _repositories.value else null
+        oldClient?.let {
+            it.dispatcher.executorService.shutdown()
+            it.connectionPool.evictAll()
         }
     }
 
@@ -102,6 +107,13 @@ class AppContainer(context: Context) {
         overridden = true
         _repositories.value = repositories
         _serverKey.value = repositories
+    }
+
+    /** Undoes [overrideForTest]: rebuilds the real repositories from the stored config and follows it again. */
+    @VisibleForTesting
+    fun clearTestOverride() {
+        overridden = false
+        scope.launch { applyConfig(serverConfigStore.config.first()) }
     }
 
     private fun build(api: MilkbankApi?) = Repositories(
