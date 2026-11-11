@@ -22,7 +22,10 @@ import app.milkbank.ui.login.LoginViewModel
 import app.milkbank.ui.login.PasswordScreen
 import app.milkbank.ui.login.PasswordViewModel
 import app.milkbank.session.LogoutReason
+import app.milkbank.ui.patients.PatientDetailRoute
+import app.milkbank.ui.patients.PatientsPane
 import app.milkbank.ui.register.RegisterScreen
+import androidx.navigation.toRoute
 import app.milkbank.ui.register.RegisterViewModel
 import kotlinx.coroutines.flow.first
 
@@ -87,8 +90,14 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<Patients> { Placeholder("Patients") }
-        composable<PatientDetail> { Placeholder("PatientDetail") }
+        composable<Patients> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            PatientsPane(container, navController)
+        }
+        composable<PatientDetail> { entry ->
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            PatientDetailRoute(container, entry.toRoute<PatientDetail>().id, navController)
+        }
         composable<PatientForm> { Placeholder("PatientForm") }
         composable<Staff> { Placeholder("Staff") }
     }

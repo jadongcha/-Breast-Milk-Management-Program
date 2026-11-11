@@ -24,6 +24,7 @@ import app.milkbank.session.ConnectionMonitor
 import app.milkbank.session.IdleWatcher
 import app.milkbank.session.LogoutReason
 import app.milkbank.session.SessionManager
+import app.milkbank.ui.patients.ResultBannerStore
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,9 @@ class AppContainer(context: Context) {
     val serverConfigStore = ServerConfigStore(appContext.serverDataStore)
     val session = SessionManager(SystemClock)
     val idleWatcher = IdleWatcher(ElapsedClock, session)
+
+    /** Last saved stock result, shared by the detail and home screens; dropped when the session ends. */
+    val resultBanner = ResultBannerStore()
     private val _serverKey = MutableStateFlow<Any?>(null)
     val connection = ConnectionMonitor(scope, serverKey = _serverKey) { auth.ping() }
 
@@ -64,6 +68,7 @@ class AppContainer(context: Context) {
     private var currentClient: OkHttpClient? = null
 
     init {
+        scope.launch { session.state.collect { if (it == null) resultBanner.clear() } }
         scope.launch {
             serverConfigStore.config.collect { config ->
                 if (overridden) return@collect

@@ -1,0 +1,196 @@
+package app.milkbank.ui.patients
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import app.milkbank.R
+import app.milkbank.ui.IdleAwareDialog
+import app.milkbank.ui.LocalOnline
+import app.milkbank.ui.components.IdleTextField
+
+private val MinButton = Modifier.heightIn(min = 56.dp)
+
+@Composable
+private fun DialogShell(
+    onDismiss: () -> Unit,
+    dismissable: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    IdleAwareDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = dismissable, dismissOnClickOutside = false),
+    ) {
+        Surface(shape = MaterialTheme.shapes.large, color = androidx.compose.ui.graphics.Color.White) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) { content() }
+        }
+    }
+}
+
+/** Buttons 1..10 in two rows. */
+@Composable
+private fun CountPicker(selected: Int?, onSelect: (Int) -> Unit) {
+    Text(stringResource(R.string.pack_count_label), style = MaterialTheme.typography.titleMedium)
+    for (row in listOf(1..5, 6..10)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (n in row) {
+                val m = Modifier.weight(1f).then(MinButton)
+                if (n == selected) Button(onClick = { onSelect(n) }, modifier = m, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("$n") }
+                else OutlinedButton(onClick = { onSelect(n) }, modifier = m, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("$n") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DialogButtons(
+    primaryText: String,
+    primaryEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onPrimary: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).then(MinButton)) {
+            Text(stringResource(R.string.cancel))
+        }
+        Button(onClick = onPrimary, enabled = primaryEnabled, modifier = Modifier.weight(1f).then(MinButton)) {
+            Text(primaryText)
+        }
+    }
+}
+
+@Composable
+fun IntakeDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit) {
+    var count by rememberSaveable { mutableStateOf<Int?>(null) }
+    var memo by rememberSaveable { mutableStateOf("") }
+    DialogShell(onDismiss) {
+        Text(stringResource(R.string.kind_intake), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        CountPicker(count) { count = it }
+        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_intake), count != null, onDismiss) { count?.let { onNext(it, memo) } }
+    }
+}
+
+@Composable
+fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit) {
+    var count by rememberSaveable { mutableIntStateOf(1) }
+    var memo by rememberSaveable { mutableStateOf("") }
+    DialogShell(onDismiss) {
+        Text(stringResource(R.string.kind_use), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            OutlinedButton(onClick = { if (count > 1) count-- }, enabled = count > 1, modifier = MinButton) { Text("−") }
+            Text(stringResource(R.string.packs, count), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            OutlinedButton(onClick = { if (count < MAX_PACKS) count++ }, enabled = count < MAX_PACKS, modifier = MinButton) { Text("+") }
+        }
+        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_use), true, onDismiss) { onNext(count, memo) }
+    }
+}
+
+@Composable
+fun DiscardDialog(onDismiss: () -> Unit, onNext: (count: Int, reason: String, memo: String) -> Unit) {
+    var count by rememberSaveable { mutableStateOf<Int?>(null) }
+    var reason by rememberSaveable { mutableStateOf<String?>(null) }
+    var memo by rememberSaveable { mutableStateOf("") }
+    DialogShell(onDismiss) {
+        Text(stringResource(R.string.kind_discard), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        CountPicker(count) { count = it }
+        Text(stringResource(R.string.discard_reason_label), style = MaterialTheme.typography.titleMedium)
+        for (r in DISCARD_REASONS) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    .selectable(selected = reason == r, role = Role.RadioButton, onClick = { reason = r }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = reason == r, onClick = null)
+                Text(reasonLabel(r), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_discard), count != null && reason != null, onDismiss) {
+            val c = count
+            val r = reason
+            if (c != null && r != null) onNext(c, r, memo)
+        }
+    }
+}
+
+/** The safety check: the baby ID is shown large. [submitting] blocks both buttons. */
+@Composable
+fun ConfirmStockDialog(
+    regNo: String,
+    action: PendingAction,
+    submitting: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val label = kindLabel(action.kind)
+    DialogShell(onDismiss, dismissable = !submitting) {
+        Text(
+            regNo,
+            Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            stringResource(R.string.confirm_stock, regNo, action.count, label),
+            Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+        )
+        action.reason?.let { Text(reasonLabel(it), Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {
+                Text(stringResource(R.string.cancel))
+            }
+            Button(onClick = onConfirm, enabled = !submitting && LocalOnline.current, modifier = Modifier.weight(1f).then(MinButton)) {
+                Text(stringResource(R.string.confirm))
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfirmCancelDialog(submitting: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    DialogShell(onDismiss, dismissable = !submitting) {
+        Text(stringResource(R.string.cancel_confirm), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {
+                Text(stringResource(R.string.back))
+            }
+            Button(onClick = onConfirm, enabled = !submitting && LocalOnline.current, modifier = Modifier.weight(1f).then(MinButton)) {
+                Text(stringResource(R.string.confirm))
+            }
+        }
+    }
+}
