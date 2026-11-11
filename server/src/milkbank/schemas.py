@@ -153,3 +153,22 @@ class StationSelfOut(BaseModel):
 
     id: int
     name: str
+
+
+class GuardianLoginIn(BaseModel):
+    phone: str
+    baby_id: str
+
+
+class BabyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    patient_id: int
+    baby_id: str
+    balance: int
+    pending_count: int
+
+
+class GuardianLoginOut(BaseModel):
+    token: str
+    babies: list[BabyOut]

@@ -171,6 +171,12 @@ def test_all_protected_routes_gated(client, app):
         kw = {"json": {}} if method in ("POST", "PATCH") else {}
         r = client.request(method, path, **kw)
         assert r.status_code == 401, (method, path, r.status_code)
+        if path.startswith("/guardian/"):
+            # 보호자 API는 제출처 토큰 + 보호자 토큰으로 지킨다(test_guardian.py).
+            # 직원 토큰만으로도 열리지 않아야 한다.
+            r = client.request(method, path, headers=auth(nurse), **kw)
+            assert r.status_code == 401, (method, path, r.status_code)
+            continue
         r = client.request(method, path, headers=auth(fresh), **kw)
         if (method, path) in _ANY_STAFF:
             assert r.status_code != 403, (method, path)

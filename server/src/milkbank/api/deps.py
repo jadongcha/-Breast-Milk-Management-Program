@@ -4,12 +4,13 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from .. import guardians as guardian_service
 from .. import staff as staff_service
 from .. import stations as station_service
 from ..clock import Clock
 from ..config import Config
-from ..errors import Forbidden
-from ..models import Role, Staff, Station
+from ..errors import DomainError, Forbidden
+from ..models import GuardianSession, Role, Staff, Station
 
 
 def get_db(request: Request) -> Iterator[Session]:
@@ -88,3 +89,18 @@ def current_station(request: Request, db: DbDep) -> Station:
 
 
 StationDep = Annotated[Station, Depends(current_station)]
+
+
+def current_guardian(request: Request, db: DbDep, station: StationDep) -> GuardianSession:
+    # 직원 세션 표는 보지 않는다. 만료된 세션 삭제가 저장되도록 실패 때도 commit한다.
+    try:
+        return guardian_service.authenticate(
+            db, request.app.state.clock, request.app.state.config,
+            station=station, raw_token=bearer_token(request),
+        )
+    except DomainError:
+        db.commit()
+        raise
+
+
+GuardianDep = Annotated[GuardianSession, Depends(current_guardian)]
