@@ -31,7 +31,11 @@ class PatientListViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
     private val _match = MutableStateFlow<BabyMatch>(BabyMatch.Empty)
+    /** Always corresponds to the current [query] (the select button uses it). */
     val match: StateFlow<BabyMatch> = _match.asStateFlow()
+    private val _listMatch = MutableStateFlow<BabyMatch>(BabyMatch.Empty)
+    /** Debounced copy that only drives list filtering. */
+    val listMatch: StateFlow<BabyMatch> = _listMatch.asStateFlow()
     val lastResult: StateFlow<ResultBanner?> = banner.last
 
     private var refreshJob: Job? = null
@@ -48,19 +52,21 @@ class PatientListViewModel(
 
     fun onQueryChange(q: String) {
         _query.value = q
+        _match.value = matchBabies(q, _patients.value)
         debounceJob?.cancel()
         if (q.isBlank()) {
-            recompute()
+            _listMatch.value = _match.value
             return
         }
         debounceJob = viewModelScope.launch {
             delay(debounceMs)
-            recompute()
+            _listMatch.value = _match.value
         }
     }
 
     private fun recompute() {
         _match.value = matchBabies(_query.value, _patients.value)
+        _listMatch.value = _match.value
     }
 
     fun refresh() {

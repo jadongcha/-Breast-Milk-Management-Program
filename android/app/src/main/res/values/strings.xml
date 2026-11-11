@@ -28,9 +28,10 @@
     <string name="no_match">일치하는 아기가 없습니다</string>
     <string name="show_section">펼치기</string>
     <string name="hide_section">접기</string>
-    <string name="menu_admin">관리자 메뉴</string>
-    <string name="menu_patient_form">환자 등록</string>
-    <string name="menu_staff">직원 관리</string>
+    <string name="menu_admin_patient_form">관리자 메뉴 · 환자 등록</string>
+    <string name="menu_admin_staff">관리자 메뉴 · 직원 관리</string>
+    <string name="baby_id_placeholder">ID</string>
+    <string name="back_with_arrow">← 뒤로</string>
     <string name="kind_intake">입고</string>
     <string name="kind_use">사용</string>
     <string name="kind_discard">폐기</string>

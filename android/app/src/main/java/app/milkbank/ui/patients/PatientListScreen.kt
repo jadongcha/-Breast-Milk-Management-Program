@@ -52,6 +52,7 @@ fun PatientListContent(
     val expanded by viewModel.expanded.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val match by viewModel.match.collectAsStateWithLifecycle()
+    val listMatch by viewModel.listMatch.collectAsStateWithLifecycle()
     val last by viewModel.lastResult.collectAsStateWithLifecycle()
     var pendingOpen by rememberSaveable { mutableStateOf(true) }
 
@@ -62,7 +63,7 @@ fun PatientListContent(
     }
 
     val shown = when {
-        match is BabyMatch.Many -> (match as BabyMatch.Many).patients
+        listMatch is BabyMatch.Many && match is BabyMatch.Many -> (listMatch as BabyMatch.Many).patients
         expanded -> patients
         else -> emptyList()
     }
@@ -123,7 +124,7 @@ fun PatientListContent(
                         onClick = { single?.let(onSelect) },
                         enabled = single != null,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    ) { Text(stringResource(R.string.select_baby, single?.regNo ?: "ID")) }
+                    ) { Text(stringResource(R.string.select_baby, single?.regNo ?: stringResource(R.string.baby_id_placeholder))) }
                     if (match is BabyMatch.None) {
                         Text(stringResource(R.string.no_match), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

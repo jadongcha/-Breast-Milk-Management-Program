@@ -136,6 +136,44 @@ class PatientDetailViewModelTest {
         assertEquals("저장했습니다", v.message.value)
     }
 
+    @Test fun cancel_updatesBannerBalanceForSameBaby() = runTest {
+        banner.post(ResultBanner("DEMO-1", "intake", 3, 8))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.cancelRecord(50); advanceUntilIdle()
+        assertEquals(2, banner.last.value!!.balance)
+        assertEquals("DEMO-1", banner.last.value!!.regNo)
+    }
+
+    @Test fun cancel_leavesOtherBabyBannerAlone() = runTest {
+        banner.post(ResultBanner("OTHER-9", "intake", 3, 8))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.cancelRecord(50); advanceUntilIdle()
+        assertEquals(8, banner.last.value!!.balance)
+    }
+
+    @Test fun staleRefresh_doesNotOverwriteSavedResult() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        patients.detailHandler = { gate.await(); ApiResult.Ok(detailDto(7, "DEMO-1", 5, emptyList())) } // pre-write snapshot
+        v.refresh(); advanceUntilIdle()
+        v.request("intake", 3, null, null); v.confirm(); advanceUntilIdle()
+        assertEquals(8, v.detail.value!!.balance)
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(8, v.detail.value!!.balance)
+        assertEquals(100, v.detail.value!!.records.first().id)
+    }
+
+    @Test fun refreshWhileSubmitting_isSkipped() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        stock.addHandler = { _, _, c, _, _ -> gate.await(); ApiResult.Ok(RecordResultDto(recordDto(100, count = c), 8)) }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        val calls = patients.detailCalls
+        v.request("intake", 3, null, null); v.confirm(); advanceUntilIdle()
+        v.refresh(); advanceUntilIdle()
+        assertEquals(calls, patients.detailCalls)
+        gate.complete(Unit); advanceUntilIdle()
+    }
+
     @Test fun cancelTwice_isIgnoredWhileSubmitting() = runTest {
         val gate = CompletableDeferred<Unit>()
         stock.cancelHandler = { id ->

@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -117,11 +118,11 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                             if (isAdmin) {
                                 HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_admin) + " · " + stringResource(R.string.menu_patient_form)) },
+                                    text = { Text(stringResource(R.string.menu_admin_patient_form)) },
                                     onClick = { menuOpen = false; navController.navigate(PatientForm(null)) },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_admin) + " · " + stringResource(R.string.menu_staff)) },
+                                    text = { Text(stringResource(R.string.menu_admin_staff)) },
                                     onClick = { menuOpen = false; navController.navigate(Staff) },
                                 )
                                 HorizontalDivider()
@@ -160,17 +161,19 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            val detailVm = rememberDetailViewModel(container, id)
-                            LaunchedEffect(id) { detailVm.refresh() }
-                            PatientDetailScreen(
-                                detailVm,
-                                onEdit = if (isAdmin) { pid: Int -> navController.navigate(PatientForm(pid)) } else null,
-                            )
+                            key(id) { // dialog/snackbar state must not carry over between babies
+                                val detailVm = rememberDetailViewModel(container, id)
+                                LaunchedEffect(id) { detailVm.refresh() }
+                                PatientDetailScreen(
+                                    detailVm,
+                                    onEdit = if (isAdmin) { pid: Int -> navController.navigate(PatientForm(pid)) } else null,
+                                )
+                            }
                         }
                     }
                 }
             } else {
-                PatientListContent(listVm, onSelect = { navController.navigate(PatientDetail(it.id)) })
+                PatientListContent(listVm, onSelect = { navController.navigate(PatientDetail(it.id)) { launchSingleTop = true } })
             }
         }
     }
@@ -190,11 +193,10 @@ fun PatientDetailRoute(container: AppContainer, id: Int, navController: NavHostC
                 title = {},
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 navigationIcon = {
-                    val back = stringResource(R.string.back)
                     androidx.compose.material3.TextButton(
                         onClick = { navController.popBackStack() },
                         modifier = Modifier.padding(start = 4.dp).heightIn(min = 56.dp),
-                    ) { Text("← $back") }
+                    ) { Text(stringResource(R.string.back_with_arrow)) }
                 },
             )
         },

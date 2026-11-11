@@ -23,6 +23,11 @@ class ResultBannerStore {
         notifyChanged()
     }
 
+    /** A cancel changed the stock: keep the banner truthful for that baby. */
+    fun updateBalance(regNo: String, balance: Int) = _last.update { b ->
+        if (b != null && b.regNo == regNo) b.copy(balance = balance) else b
+    }
+
     fun notifyChanged() = _changes.update { it + 1 }
 
     fun clear() {

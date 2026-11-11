@@ -11,6 +11,7 @@ import app.milkbank.data.PatientRepository
 import app.milkbank.data.StockRepository
 import app.milkbank.session.SessionManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,11 +48,19 @@ class PatientDetailViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private var refreshJob: Job? = null
+
+    // Bumped by every applied write; a refresh that began before a write must not overwrite it.
+    private var writeSeq = 0
+
     fun refresh() {
-        viewModelScope.launch {
+        if (_submitting.value) return
+        refreshJob?.cancel()
+        val startedAt = writeSeq
+        refreshJob = viewModelScope.launch {
             try {
                 when (val r = patientRepo().detail(patientId)) {
-                    is ApiResult.Ok -> {
+                    is ApiResult.Ok -> if (startedAt == writeSeq) {
                         _detail.value = r.value
                         _error.value = null
                     }
@@ -133,12 +142,14 @@ class PatientDetailViewModel(
 
     fun cancelRecord(id: Int) {
         if (!_submitting.compareAndSet(false, true)) return
+        val regNo = _detail.value?.regNo
         viewModelScope.launch {
             try {
                 when (val r = stockRepo().cancel(id)) {
                     is ApiResult.Ok -> {
                         applyResult(r.value)
                         _message.value = savedMessage
+                        regNo?.let { banner.updateBalance(it, r.value.balance) }
                         banner.notifyChanged()
                     }
                     is ApiResult.Err -> _error.value = r.error.message
@@ -155,6 +166,8 @@ class PatientDetailViewModel(
     }
 
     private fun applyResult(result: RecordResultDto) {
+        writeSeq++
+        refreshJob?.cancel()
         val rec = result.record
         _detail.update { d ->
             d?.copy(

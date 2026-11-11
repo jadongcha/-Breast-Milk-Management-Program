@@ -47,14 +47,23 @@ class PatientListViewModelTest {
         assertEquals(list, v.patients.value)
     }
 
-    @Test fun search_isDebounced() = runTest {
+    @Test fun listFiltering_isDebounced() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
-        v.onQueryChange("demo-1")
-        assertEquals("demo-1", v.query.value)
+        v.onQueryChange("demo")
         advanceTimeBy(200)
-        assertEquals(BabyMatch.Empty, v.match.value)
+        assertEquals(BabyMatch.Empty, v.listMatch.value)
         advanceTimeBy(100); advanceUntilIdle()
+        assertEquals(BabyMatch.Many(list), v.listMatch.value)
+    }
+
+    @Test fun selectTarget_correspondsToCurrentQueryImmediately() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.onQueryChange("DEMO-1")
         assertEquals(BabyMatch.Single(list[0]), v.match.value)
+        v.onQueryChange("DEMO-10")
+        assertEquals(BabyMatch.Single(list[1]), v.match.value)
+        v.onQueryChange("DEMO-1x")
+        assertEquals(BabyMatch.None, v.match.value) // no stale Single for an older query
     }
 
     @Test fun search_onlyLastQueryApplies() = runTest {
@@ -62,6 +71,7 @@ class PatientListViewModelTest {
         v.onQueryChange("demo"); advanceTimeBy(100)
         v.onQueryChange("demo-10"); advanceUntilIdle()
         assertEquals(BabyMatch.Single(list[1]), v.match.value)
+        assertEquals(BabyMatch.Single(list[1]), v.listMatch.value)
     }
 
     @Test fun clearingQuery_resetsAtOnce() = runTest {
