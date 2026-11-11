@@ -39,10 +39,10 @@ import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
 
-private val MinButton = Modifier.heightIn(min = 56.dp)
+internal val MinButton = Modifier.heightIn(min = 56.dp)
 
 @Composable
-private fun DialogShell(
+internal fun DialogShell(
     onDismiss: () -> Unit,
     dismissable: Boolean = true,
     content: @Composable () -> Unit,

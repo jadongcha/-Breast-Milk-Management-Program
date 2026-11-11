@@ -35,6 +35,7 @@ fun MilkCard(
 fun kindLabel(kind: String): String = stringResource(
     when (kind) {
         "intake", "in" -> R.string.kind_intake
+        "intake_confirm" -> R.string.kind_intake_confirm
         "use" -> R.string.kind_use
         "discard" -> R.string.kind_discard
         "return" -> R.string.kind_return

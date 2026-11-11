@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/** kind is "intake", "use" or "discard". */
+/** kind is "intake", "use", "discard" or "intake_confirm" (a nurse confirmed a guardian submission). */
 data class ResultBanner(val regNo: String, val kind: String, val count: Int, val balance: Int)
 
 /** Shared by detail (writer) and home (reader); cleared when the session ends. */

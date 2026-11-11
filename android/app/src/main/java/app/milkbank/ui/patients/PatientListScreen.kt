@@ -24,6 +24,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,12 +38,17 @@ import app.milkbank.R
 import app.milkbank.api.PatientDto
 import app.milkbank.ui.MilkbankColors
 import app.milkbank.ui.components.IdleTextField
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private const val PENDING_REFRESH_MS = 30_000L
 
 /** Home body (spec 3.4): result banner, pending card, all-babies list, ID search. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PatientListContent(
     viewModel: PatientListViewModel,
+    pendingViewModel: PendingViewModel,
     onSelect: (PatientDto) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -56,10 +62,21 @@ fun PatientListContent(
     val last by viewModel.lastResult.collectAsStateWithLifecycle()
     var pendingOpen by rememberSaveable { mutableStateOf(true) }
 
-    // Coming back from the detail screen (or the app) reloads the list.
+    val pendingItems by pendingViewModel.items.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    // Coming back from the detail screen (or the app) reloads the list and the pending table;
+    // the pending table then refreshes every 30 s, only while this home is resumed.
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
-        onPauseOrDispose { }
+        pendingViewModel.refresh()
+        val ticker = scope.launch {
+            while (true) {
+                delay(PENDING_REFRESH_MS)
+                pendingViewModel.refresh()
+            }
+        }
+        onPauseOrDispose { ticker.cancel() }
     }
 
     val shown = when {
@@ -96,7 +113,7 @@ fun PatientListContent(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                stringResource(R.string.pending_title),
+                                stringResource(R.string.pending_count_title, pendingItems.size),
                                 Modifier.weight(1f),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
@@ -106,7 +123,7 @@ fun PatientListContent(
                             }
                         }
                         if (pendingOpen) {
-                            Text(stringResource(R.string.pending_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            PendingSection(pendingViewModel)
                         }
                     }
                 }

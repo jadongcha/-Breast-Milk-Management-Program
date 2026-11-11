@@ -100,6 +100,18 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
             }
         },
     )
+    val intakeConfirm = stringResource(R.string.kind_intake_confirm)
+    val pendingUncertain = stringResource(R.string.pending_uncertain)
+    val pendingVm: PendingViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                PendingViewModel(
+                    { container.submissions }, container.resultBanner, SystemClock, intakeConfirm,
+                    pendingUncertain, unexpected, logUnexpected("pending table failed"),
+                )
+            }
+        },
+    )
     val session by container.session.state.collectAsStateWithLifecycle()
     val staff = session?.staff
     val isAdmin = staff?.role == "admin"
@@ -200,6 +212,7 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                 Row(Modifier.fillMaxSize()) {
                     PatientListContent(
                         listVm,
+                        pendingVm,
                         onSelect = { selectedId = it.id },
                         modifier = Modifier.width(total * 0.4f).fillMaxHeight(),
                     )
@@ -224,7 +237,7 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                     }
                 }
             } else {
-                PatientListContent(listVm, onSelect = { navController.navigate(PatientDetail(it.id)) { launchSingleTop = true } })
+                PatientListContent(listVm, pendingVm, onSelect = { navController.navigate(PatientDetail(it.id)) { launchSingleTop = true } })
             }
         }
     }
