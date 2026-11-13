@@ -94,8 +94,10 @@ class MainFlowTest {
 
     @Test
     fun mainFlow_intakeUpdatesBalance() {
-        // Login (cold start can be slow)
-        waitForText("로그인", timeoutMillis = 20_000)
+        // Role choice first (cold start can be slow), then the staff login form
+        waitForText("간호사·직원", timeoutMillis = 20_000)
+        rule.onNodeWithText("간호사·직원").performClick()
+        waitForText("로그인")
         rule.onNodeWithText("아이디").performTextInput(FAKE_USERNAME)
         rule.onNodeWithText("비밀번호").performTextInput(FAKE_PASSWORD)
         rule.onNodeWithText("로그인").performClick()

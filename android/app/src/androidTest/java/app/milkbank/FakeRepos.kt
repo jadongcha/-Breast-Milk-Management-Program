@@ -134,21 +134,29 @@ class FakeStations : StationRepository {
 }
 
 class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
+    /** Every stationToken received by login/babies/submit/logout, in call order (null = general device). */
+    val receivedStationTokens: MutableList<String?> = java.util.Collections.synchronizedList(mutableListOf<String?>())
+
     private fun baby() = BabyDto(10, FAKE_REG_NO, world?.balance ?: 0, world?.pending ?: 0)
 
     override suspend fun login(stationToken: String?, phone: String, babyId: String):
-        ApiResult<GuardianLoginResponse> =
-        if (world != null && phone == FAKE_GUARDIAN_PHONE && babyId == FAKE_REG_NO) {
+        ApiResult<GuardianLoginResponse> {
+        receivedStationTokens.add(stationToken)
+        return if (world != null && phone == FAKE_GUARDIAN_PHONE && babyId == FAKE_REG_NO) {
             ApiResult.Ok(GuardianLoginResponse("fake-guardian-token", listOf(baby())))
         } else {
             ApiResult.Err(unsupported)
         }
+    }
 
-    override suspend fun babies(stationToken: String?, guardianToken: String): ApiResult<List<BabyDto>> =
-        if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
+    override suspend fun babies(stationToken: String?, guardianToken: String): ApiResult<List<BabyDto>> {
+        receivedStationTokens.add(stationToken)
+        return if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
+    }
 
     override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int):
         ApiResult<GuardianSubmitResponse> {
+        receivedStationTokens.add(stationToken)
         val w = world ?: return ApiResult.Err(unsupported)
         w.pending += count
         return ApiResult.Ok(
@@ -156,7 +164,10 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
         )
     }
 
-    override fun logout(stationToken: String?, guardianToken: String): Job = Job().apply { complete() }
+    override fun logout(stationToken: String?, guardianToken: String): Job {
+        receivedStationTokens.add(stationToken)
+        return Job().apply { complete() }
+    }
 }
 
 class FakeSubmissions : SubmissionRepository {
@@ -166,12 +177,12 @@ class FakeSubmissions : SubmissionRepository {
         ApiResult.Err(unsupported)
 }
 
-fun fakeRepositories(session: SessionManager, world: FakeWorld) = Repositories(
+fun fakeRepositories(session: SessionManager, world: FakeWorld, guardian: FakeGuardian = FakeGuardian(world)) = Repositories(
     auth = FakeAuth(session),
     patients = FakePatients(world),
     stock = FakeStock(world),
     staff = FakeStaff(),
     stations = FakeStations(),
-    guardian = FakeGuardian(world),
+    guardian = guardian,
     submissions = FakeSubmissions(),
 )
