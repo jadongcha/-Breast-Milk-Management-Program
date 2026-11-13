@@ -44,23 +44,23 @@ interface MilkbankApi {
 
     @POST("guardian/login")
     suspend fun guardianLogin(
-        @Header("X-Station-Token") stationToken: String,
+        @Header("X-Station-Token") stationToken: String?,
         @Body body: GuardianLoginRequest,
     ): GuardianLoginResponse
     @GET("guardian/babies")
     suspend fun guardianBabies(
-        @Header("X-Station-Token") stationToken: String,
+        @Header("X-Station-Token") stationToken: String?,
         @Header("Authorization") authorization: String,
     ): List<BabyDto>
     @POST("guardian/submissions")
     suspend fun guardianSubmit(
-        @Header("X-Station-Token") stationToken: String,
+        @Header("X-Station-Token") stationToken: String?,
         @Header("Authorization") authorization: String,
         @Body body: GuardianSubmitRequest,
     ): GuardianSubmitResponse
     @POST("guardian/logout")
     suspend fun guardianLogout(
-        @Header("X-Station-Token") stationToken: String,
+        @Header("X-Station-Token") stationToken: String?,
         @Header("Authorization") authorization: String,
     )
 

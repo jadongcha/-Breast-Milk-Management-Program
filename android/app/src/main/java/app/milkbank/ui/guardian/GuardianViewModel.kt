@@ -37,6 +37,7 @@ sealed interface GuardianStep {
 /** Guardian session on a station tablet. The guardian token lives here only; logout and idle drop everything. */
 class GuardianViewModel(
     private val guardian: () -> GuardianRepository,
+    /** The station tablet's token; null on a general hospital device, where requests go without one. */
     private val stationToken: () -> String?,
     private val idle: GuardianIdle,
     private val onStationInvalid: () -> Unit,
@@ -51,6 +52,11 @@ class GuardianViewModel(
     val step: StateFlow<GuardianStep> = _step.asStateFlow()
     private val _submitting = MutableStateFlow(false)
     val submitting: StateFlow<Boolean> = _submitting.asStateFlow()
+
+    private val _sessionEnded = MutableStateFlow(0L)
+
+    /** Bumped each time the session ends (finish, idle, 401): a general-device route returns to the choice screen. */
+    val sessionEnded: StateFlow<Long> = _sessionEnded.asStateFlow()
 
     private var token: String? = null
 
@@ -73,7 +79,8 @@ class GuardianViewModel(
         _submitting.value = false
         idle.disarm()
         _step.value = blank
-        if (t != null && st != null) guardian().logout(st, t)
+        _sessionEnded.value += 1
+        if (t != null) guardian().logout(st, t)
     }
 
     fun finish() = reset()
@@ -84,7 +91,7 @@ class GuardianViewModel(
         val st = stationToken()
         token = null
         idle.disarm()
-        if (t != null && st != null) guardian().logout(st, t)
+        if (t != null) guardian().logout(st, t)
     }
 
     private fun startStep(): GuardianStep.Start? = _step.value as? GuardianStep.Start
@@ -108,7 +115,7 @@ class GuardianViewModel(
         if (cur.submitting) return
         val phone = cur.phone.trim()
         val babyId = cur.babyId.trim()
-        val st = stationToken() ?: return
+        val st = stationToken()
         if (phone.isEmpty() || babyId.isEmpty()) return
         _step.value = cur.copy(error = null, submitting = true)
         val g = gen
@@ -175,7 +182,7 @@ class GuardianViewModel(
 
     /** Steps between login and submit send no requests: keep the server session alive while the parent is active. */
     private fun keepAliveInBackground() {
-        val st = stationToken() ?: return
+        val st = stationToken()
         val t = token ?: return
         if (!stale()) return
         val g = gen
@@ -183,7 +190,7 @@ class GuardianViewModel(
     }
 
     /** Asks the server for the baby list when the last request is stale. Session-over answers end the flow here. */
-    private suspend fun keepAlive(st: String, t: String, g: Int): Alive = keepAliveLock.withLock {
+    private suspend fun keepAlive(st: String?, t: String, g: Int): Alive = keepAliveLock.withLock {
         if (g != gen) return@withLock Alive.Ended
         if (!stale()) return@withLock Alive.Ok
         try {
@@ -215,7 +222,7 @@ class GuardianViewModel(
 
     fun submit() {
         val cur = _step.value as? GuardianStep.ConfirmSubmit ?: return
-        val st = stationToken() ?: return
+        val st = stationToken()
         val t = token ?: return
         // Set before launching so a second tap can never send a second submission.
         if (_submitting.value) return
@@ -269,7 +276,7 @@ class GuardianViewModel(
         return false
     }
 
-    private suspend fun refreshToStock(st: String, t: String, baby: BabyDto, g: Int, notice: String) {
+    private suspend fun refreshToStock(st: String?, t: String, baby: BabyDto, g: Int, notice: String) {
         val fallback = GuardianStep.Stock(baby, notice)
         try {
             when (val r = guardian().babies(st, t)) {

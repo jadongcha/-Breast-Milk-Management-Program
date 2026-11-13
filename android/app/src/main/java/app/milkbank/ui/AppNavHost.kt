@@ -3,6 +3,7 @@ package app.milkbank.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import app.milkbank.ui.guardian.GuardianGeneralRoute
 import app.milkbank.ui.guardian.GuardianHomeRoute
 import app.milkbank.ui.station.StationsScreen
 import app.milkbank.ui.station.StationsViewModel
@@ -76,6 +77,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 vm,
                 onNavigate = { navController.navigateClearingStack(it) },
                 onRegisterAgain = { navController.navigate(Register) },
+                onGuardian = { navController.navigate(GuardianGeneral) },
             )
         }
         composable<Password> {
@@ -148,6 +150,11 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
         composable<GuardianHome> {
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
             GuardianHomeRoute(container)
+        }
+        composable<GuardianGeneral> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            // Back to the choice screen with a clean stack: nothing of the parent's session stays behind.
+            GuardianGeneralRoute(container, onExit = { navController.navigateClearingStack(Login) })
         }
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -24,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +44,14 @@ import app.milkbank.ui.permission.errorToShow
 import app.milkbank.ui.permission.rememberLocalNetworkPermission
 
 @Composable
-fun LoginScreen(viewModel: LoginViewModel, onNavigate: (Route) -> Unit, onRegisterAgain: () -> Unit) {
+fun LoginScreen(
+    viewModel: LoginViewModel,
+    onNavigate: (Route) -> Unit,
+    onRegisterAgain: () -> Unit,
+    onGuardian: () -> Unit,
+) {
+    // Saved with the destination; a fresh Login entry (after leaving the guardian flow) starts at the choice.
+    var staffChosen by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     // The permission notice (with its button) sits in the app-wide strip; here only drop the misleading network error.
@@ -71,57 +80,87 @@ fun LoginScreen(viewModel: LoginViewModel, onNavigate: (Route) -> Unit, onRegist
                 )
             }
         }
-        Column(
-            Modifier
-                .align(Alignment.Center)
-                .widthIn(max = 420.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                stringResource(R.string.login_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            IdleTextField(
-                value = state.username,
-                onValueChange = viewModel::onUsernameChange,
-                label = stringResource(R.string.username_label),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Ascii,
-                    imeAction = ImeAction.Next,
-                ),
-            )
-            IdleTextField(
-                value = state.password,
-                onValueChange = viewModel::onPasswordChange,
-                label = stringResource(R.string.password_label),
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading,
-                isError = state.error != null,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
-            )
-            errorToShow(state.error, permissionMissing)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(
-                onClick = viewModel::submit,
-                enabled = state.canSubmit,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        if (!staffChosen) {
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                if (state.loading) CircularProgressIndicator(Modifier.padding(2.dp), strokeWidth = 2.dp)
-                else Text(stringResource(R.string.login_button))
+                Text(
+                    stringResource(R.string.login_choose_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Button(
+                    onClick = { staffChosen = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                ) { Text(stringResource(R.string.login_role_staff), style = MaterialTheme.typography.titleLarge) }
+                OutlinedButton(
+                    onClick = onGuardian,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                ) { Text(stringResource(R.string.login_role_guardian), style = MaterialTheme.typography.titleLarge) }
+            }
+        } else {
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                TextButton(
+                    onClick = { viewModel.clear(); staffChosen = false },
+                    modifier = Modifier.heightIn(min = 56.dp),
+                ) { Text(stringResource(R.string.login_back_to_choice)) }
+                Text(
+                    stringResource(R.string.login_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                IdleTextField(
+                    value = state.username,
+                    onValueChange = viewModel::onUsernameChange,
+                    label = stringResource(R.string.username_label),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.loading,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Ascii,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+                IdleTextField(
+                    value = state.password,
+                    onValueChange = viewModel::onPasswordChange,
+                    label = stringResource(R.string.password_label),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.loading,
+                    isError = state.error != null,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
+                )
+                errorToShow(state.error, permissionMissing)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Button(
+                    onClick = viewModel::submit,
+                    enabled = state.canSubmit,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                ) {
+                    if (state.loading) CircularProgressIndicator(Modifier.padding(2.dp), strokeWidth = 2.dp)
+                    else Text(stringResource(R.string.login_button))
+                }
             }
         }
     }

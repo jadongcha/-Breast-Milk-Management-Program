@@ -41,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import app.milkbank.server.ServerConfig
 import app.milkbank.session.LogoutReason
 import app.milkbank.ui.AppNavHost
+import app.milkbank.ui.GuardianGeneral
 import app.milkbank.ui.GuardianHome
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.LocalIdleTouch
@@ -57,6 +58,7 @@ import app.milkbank.ui.permission.localNetworkPermissionRequired
 import app.milkbank.ui.permission.rememberLocalNetworkPermission
 import app.milkbank.ui.permission.shouldRequestAtStart
 import app.milkbank.ui.needsLoginRedirect
+import app.milkbank.ui.publicRoute
 import app.milkbank.ui.startDestination
 import app.milkbank.ui.stationModeRedirect
 import app.milkbank.ui.stationReleased
@@ -191,8 +193,11 @@ class MainActivity : ComponentActivity() {
         // Process death restores the back stack but not the in-memory session.
         val backStackEntry by navController.currentBackStackEntryAsState()
         val destination = backStackEntry?.destination
-        val routeIsPublic = destination == null ||
-            destination.hasRoute<Register>() || destination.hasRoute<Login>()
+        val routeIsPublic = destination == null || publicRoute(
+            isRegister = destination.hasRoute<Register>(),
+            isLogin = destination.hasRoute<Login>(),
+            isGuardianGeneral = destination.hasRoute<GuardianGeneral>(),
+        )
         val routeIsGuardian = destination == null || destination.hasRoute<GuardianHome>()
         LaunchedEffect(sessionState, routeIsPublic, current.config, stationMode) {
             if (!stationMode && needsLoginRedirect(sessionState, current.config != null, routeIsPublic)) {

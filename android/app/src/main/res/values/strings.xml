@@ -137,6 +137,11 @@
     <string name="station_inactive">중지</string>
     <string name="station_deactivate">사용 중지</string>
     <string name="station_deactivate_confirm">"'%1$s' 제출처를 사용 중지합니다. 다시 켤 수 없고, 다시 쓰려면 새로 등록해야 합니다"</string>
+    <string name="login_choose_title">누구로 들어가시나요?</string>
+    <string name="login_role_staff">간호사·직원</string>
+    <string name="login_role_guardian">보호자 (모유 제출)</string>
+    <string name="guardian_general_header">보호자 확인</string>
+    <string name="login_back_to_choice">← 처음으로</string>
     <string name="guardian_station_header">제출처 태블릿 · %1$s</string>
     <string name="guardian_phone_label">보호자 전화번호</string>
     <string name="guardian_baby_id_label">아기 ID</string>

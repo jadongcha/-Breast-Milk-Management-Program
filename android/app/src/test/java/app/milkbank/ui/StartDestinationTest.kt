@@ -59,3 +59,19 @@ class StartDestinationTest {
         assertEquals(false, needsLoginRedirect(sess, hasConfig = true, routeIsPublic = false))
     }
 }
+
+class GeneralGuardianRouteTest {
+    @Test fun startDestination_generalGuardianIsPublic() {
+        assertEquals(false, needsLoginRedirect(session = null, hasConfig = true, routeIsPublic = true))
+        assertEquals(true, publicRoute(isRegister = false, isLogin = false, isGuardianGeneral = true))
+        assertEquals(true, publicRoute(isRegister = true, isLogin = false, isGuardianGeneral = false))
+        assertEquals(true, publicRoute(isRegister = false, isLogin = true, isGuardianGeneral = false))
+        assertEquals(false, publicRoute(isRegister = false, isLogin = false, isGuardianGeneral = false))
+    }
+
+    @Test fun stationMode_redirectsGeneralGuardian() {
+        // GuardianGeneral is not the station guardian route (GuardianHome).
+        assertEquals(true, stationModeRedirect(true, routeIsGuardian = false))
+        assertEquals(false, stationModeRedirect(false, routeIsGuardian = false))
+    }
+}

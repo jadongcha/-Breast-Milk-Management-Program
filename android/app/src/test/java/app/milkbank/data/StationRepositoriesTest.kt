@@ -59,6 +59,25 @@ class StationRepositoriesTest {
     }
 
     @Test
+    fun guardianCalls_withoutStationToken_omitHeader() = runBlocking {
+        val repo = HttpGuardianRepository(api, net)
+        server.enqueue(json("""{"token":"gt","babies":[]}"""))
+        repo.login(null, "01012345678", "B-1")
+        server.enqueue(json("[]"))
+        repo.babies(null, "gt")
+        server.enqueue(
+            json("""{"submission":{"id":9,"count":3,"submitted_at":"2026-11-10T05:13:00"},"balance":7,"pending_count":1}"""),
+        )
+        repo.submit(null, "gt", 4, 3)
+        server.enqueue(MockResponse().setResponseCode(204))
+        repo.logout(null, "gt").join()
+        repeat(4) {
+            val req = server.takeRequest()
+            assertEquals(null, req.getHeader("X-Station-Token"))
+        }
+    }
+
+    @Test
     fun guardianLogin_sendsStationTokenAndBody() = runBlocking {
         server.enqueue(
             json("""{"token":"gt","babies":[{"patient_id":4,"baby_id":"B-1","balance":5,"pending_count":2}]}"""),

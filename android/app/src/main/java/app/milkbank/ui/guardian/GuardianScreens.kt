@@ -54,9 +54,35 @@ private fun GuardianButton(
     }
 }
 
-/** The guardian steps below the station header. All state comes from [vm]; nothing is kept here. */
+/**
+ * Header plus the guardian steps (or, when [invalid], the station-invalid message in their place), shared by the
+ * station tablet and general hospital devices. All state comes from [vm]; nothing is kept here.
+ */
 @Composable
-fun GuardianFlow(vm: GuardianViewModel) {
+fun GuardianFlow(vm: GuardianViewModel, header: String, invalid: Boolean = false) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp)) {
+        Text(
+            header,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp), // clear of the hidden corner area
+        )
+        if (invalid) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    stringResource(R.string.station_invalid_message),
+                    style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            GuardianSteps(vm)
+        }
+    }
+}
+
+@Composable
+private fun GuardianSteps(vm: GuardianViewModel) {
     val step by vm.step.collectAsStateWithLifecycle()
     val submitting by vm.submitting.collectAsStateWithLifecycle()
     val online = LocalOnline.current

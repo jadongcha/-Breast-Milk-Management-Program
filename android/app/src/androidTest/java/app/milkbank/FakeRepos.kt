@@ -136,7 +136,7 @@ class FakeStations : StationRepository {
 class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
     private fun baby() = BabyDto(10, FAKE_REG_NO, world?.balance ?: 0, world?.pending ?: 0)
 
-    override suspend fun login(stationToken: String, phone: String, babyId: String):
+    override suspend fun login(stationToken: String?, phone: String, babyId: String):
         ApiResult<GuardianLoginResponse> =
         if (world != null && phone == FAKE_GUARDIAN_PHONE && babyId == FAKE_REG_NO) {
             ApiResult.Ok(GuardianLoginResponse("fake-guardian-token", listOf(baby())))
@@ -144,10 +144,10 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
             ApiResult.Err(unsupported)
         }
 
-    override suspend fun babies(stationToken: String, guardianToken: String): ApiResult<List<BabyDto>> =
+    override suspend fun babies(stationToken: String?, guardianToken: String): ApiResult<List<BabyDto>> =
         if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
 
-    override suspend fun submit(stationToken: String, guardianToken: String, patientId: Int, count: Int):
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int):
         ApiResult<GuardianSubmitResponse> {
         val w = world ?: return ApiResult.Err(unsupported)
         w.pending += count
@@ -156,7 +156,7 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
         )
     }
 
-    override fun logout(stationToken: String, guardianToken: String): Job = Job().apply { complete() }
+    override fun logout(stationToken: String?, guardianToken: String): Job = Job().apply { complete() }
 }
 
 class FakeSubmissions : SubmissionRepository {

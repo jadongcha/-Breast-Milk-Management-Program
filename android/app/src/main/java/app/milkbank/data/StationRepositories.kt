@@ -36,19 +36,19 @@ interface StationRepository {
     suspend fun releaseSelf(stationToken: String): ApiResult<Unit>
 }
 
-/** Guardian calls from a station tablet. Both tokens are sent explicitly on every request. */
+/** Guardian calls. Both tokens are sent explicitly on every request; a null station token (general device) sends no header. */
 interface GuardianRepository {
-    suspend fun login(stationToken: String, phone: String, babyId: String): ApiResult<GuardianLoginResponse>
-    suspend fun babies(stationToken: String, guardianToken: String): ApiResult<List<BabyDto>>
+    suspend fun login(stationToken: String?, phone: String, babyId: String): ApiResult<GuardianLoginResponse>
+    suspend fun babies(stationToken: String?, guardianToken: String): ApiResult<List<BabyDto>>
     suspend fun submit(
-        stationToken: String,
+        stationToken: String?,
         guardianToken: String,
         patientId: Int,
         count: Int,
     ): ApiResult<GuardianSubmitResponse>
 
     /** Sent from the app scope without waiting for the answer; failures are ignored. */
-    fun logout(stationToken: String, guardianToken: String): Job
+    fun logout(stationToken: String?, guardianToken: String): Job
 }
 
 interface SubmissionRepository {
@@ -74,18 +74,18 @@ class HttpGuardianRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob()),
 ) : GuardianRepository {
-    override suspend fun login(stationToken: String, phone: String, babyId: String) =
+    override suspend fun login(stationToken: String?, phone: String, babyId: String) =
         api.call(networkError) { it.guardianLogin(stationToken, GuardianLoginRequest(phone, babyId)) }
 
-    override suspend fun babies(stationToken: String, guardianToken: String) =
+    override suspend fun babies(stationToken: String?, guardianToken: String) =
         api.call(networkError) { it.guardianBabies(stationToken, "Bearer $guardianToken") }
 
-    override suspend fun submit(stationToken: String, guardianToken: String, patientId: Int, count: Int) =
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int) =
         api.call(networkError) {
             it.guardianSubmit(stationToken, "Bearer $guardianToken", GuardianSubmitRequest(patientId, count))
         }
 
-    override fun logout(stationToken: String, guardianToken: String): Job {
+    override fun logout(stationToken: String?, guardianToken: String): Job {
         val a = api ?: return Job().apply { complete() }
         return appScope.launch(ioDispatcher) {
             try {

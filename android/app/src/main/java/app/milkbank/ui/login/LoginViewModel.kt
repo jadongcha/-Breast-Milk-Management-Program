@@ -36,6 +36,8 @@ class LoginViewModel(
 
     fun onUsernameChange(v: String) = _state.update { it.copy(username = v, error = null) }
     fun onPasswordChange(v: String) = _state.update { it.copy(password = v, error = null) }
+    /** Back to the choice screen: drop what was typed (shared devices). Ignored while signing in. */
+    fun clear() = _state.update { if (it.loading) it else LoginState() }
     fun onNavigated() = _state.update { it.copy(next = null) }
 
     fun submit() {

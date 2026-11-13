@@ -34,11 +34,11 @@ class GuardianViewModelTest {
         var babiesHandler: suspend () -> ApiResult<List<BabyDto>> = { error("unset") }
         var submitHandler: suspend () -> ApiResult<GuardianSubmitResponse> = { error("unset") }
         var submitCalls = 0
-        val logouts = mutableListOf<Pair<String, String>>()
-        override suspend fun login(stationToken: String, phone: String, babyId: String) = loginHandler()
-        override suspend fun babies(stationToken: String, guardianToken: String) = babiesHandler()
+        val logouts = mutableListOf<Pair<String?, String>>()
+        override suspend fun login(stationToken: String?, phone: String, babyId: String) = loginHandler()
+        override suspend fun babies(stationToken: String?, guardianToken: String) = babiesHandler()
         override suspend fun submit(
-            stationToken: String,
+            stationToken: String?,
             guardianToken: String,
             patientId: Int,
             count: Int,
@@ -47,7 +47,7 @@ class GuardianViewModelTest {
             return submitHandler()
         }
 
-        override fun logout(stationToken: String, guardianToken: String): Job {
+        override fun logout(stationToken: String?, guardianToken: String): Job {
             logouts += stationToken to guardianToken
             return Job().apply { complete() }
         }
@@ -337,5 +337,60 @@ class GuardianViewModelTest {
         vm.startSubmit()
         vm.pickCount(11)
         assertEquals(GuardianStep.PickCount(b1, null), vm.step.value)
+    }
+
+    @Test fun general_idle_returnsToChoice_andClears() {
+        stationToken = null
+        val vm = vm()
+        login(vm)
+        assertEquals(0L, vm.sessionEnded.value)
+        clock.advance(Duration.ofSeconds(60))
+        idle.check()
+        assertEquals(1L, vm.sessionEnded.value)
+        assertEquals(start, vm.step.value)
+        assertEquals(listOf<Pair<String?, String>>(null to "gt"), repo.logouts)
+    }
+
+    @Test fun general_back_logsOutAndReturns() {
+        stationToken = null
+        val vm = vm()
+        login(vm)
+        vm.finish()
+        assertEquals(listOf<Pair<String?, String>>(null to "gt"), repo.logouts)
+        assertEquals(1L, vm.sessionEnded.value)
+        assertEquals(start, vm.step.value)
+    }
+
+    @Test fun general_finish_beforeLogin_noServerCall() {
+        stationToken = null
+        val vm = vm()
+        vm.onPhone("0101")
+        vm.finish()
+        assertTrue(repo.logouts.isEmpty())
+        assertEquals(1L, vm.sessionEnded.value)
+        assertEquals(start, vm.step.value)
+    }
+
+    @Test fun general_idle_whileTyping_beforeLogin_bumpsSessionEnded() {
+        stationToken = null
+        val vm = vm()
+        vm.onPhone("0101")
+        clock.advance(Duration.ofSeconds(60))
+        idle.check()
+        assertEquals(1L, vm.sessionEnded.value)
+        assertTrue(repo.logouts.isEmpty())
+    }
+
+    @Test fun general_other401_endsSessionAndBumps() {
+        stationToken = null
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(2)
+        repo.babiesHandler = { ApiResult.Err(ApiError(401, "x")) }
+        clock.advance(Duration.ofSeconds(45))
+        vm.submit()
+        assertEquals(1L, vm.sessionEnded.value)
+        assertEquals(0, invalidCalls)
     }
 }

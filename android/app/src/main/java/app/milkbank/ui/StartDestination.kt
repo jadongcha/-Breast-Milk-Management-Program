@@ -17,6 +17,9 @@ sealed interface Route
 @Serializable data object Stations : Route
 @Serializable data object GuardianHome : Route
 
+/** Guardian flow on a general hospital device: public (no staff session), no station token. */
+@Serializable data object GuardianGeneral : Route
+
 /** True when a registered server has just been removed, so the app must go back to registration. */
 fun configClearedNeedsRegister(previous: ServerConfig?, current: ServerConfig?): Boolean =
     previous != null && current == null
@@ -35,6 +38,10 @@ fun startDestination(config: ServerConfig?, session: Session?, station: StationC
  */
 fun needsLoginRedirect(session: Session?, hasConfig: Boolean, routeIsPublic: Boolean): Boolean =
     hasConfig && session == null && !routeIsPublic
+
+/** Screens a registered app may show without a staff session. */
+fun publicRoute(isRegister: Boolean, isLogin: Boolean, isGuardianGeneral: Boolean): Boolean =
+    isRegister || isLogin || isGuardianGeneral
 
 /**
  * Station mode shows the guardian screen only: any other route (also a restored back stack after process
