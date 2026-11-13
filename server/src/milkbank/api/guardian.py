@@ -11,17 +11,18 @@ from ..schemas import (
     SubmitResult,
     SubmittedOut,
 )
-from .deps import DbDep, GuardianDep, StationDep
+from .deps import DbDep, GuardianDep, OptionalStationDep
 
 router = APIRouter(prefix="/guardian", tags=["guardian"])
 
 
 @router.post("/login", response_model=GuardianLoginOut)
-def login(body: GuardianLoginIn, request: Request, db: DbDep, station: StationDep):
+def login(body: GuardianLoginIn, request: Request, db: DbDep, station: OptionalStationDep):
     try:
         token, babies = guardian_service.login(
             db, request.app.state.clock, request.app.state.config,
-            station=station, phone=body.phone, baby_id=body.baby_id,
+            station=station,
+            client_ip=request.client.host if request.client else None, phone=body.phone, baby_id=body.baby_id,
         )
     except DomainError:
         # 실패 횟수 기록이 오류 응답에도 남도록 저장한 뒤 다시 던진다.

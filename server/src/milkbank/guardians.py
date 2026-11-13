@@ -1,4 +1,4 @@
-"""보호자 서비스: 제출처 기기에서의 로그인, 세션 인증, 아기 목록.
+"""보호자 서비스: 제출처 기기 또는 일반 병원 기기에서의 로그인, 세션 인증, 아기 목록.
 
 모든 트랜잭션은 BEGIN IMMEDIATE로 시작하므로 각 함수의 첫 쿼리가 쓰기 잠금을 잡는다.
 """
@@ -37,6 +37,13 @@ class BabyView:
     pending_count: int
 
 
+def _same_station(station_id: int | None):
+    # 일반 기기 세션은 station_id가 NULL이라 `=`가 아니라 IS NULL로 비교해야 한다.
+    if station_id is None:
+        return GuardianSession.station_id.is_(None)
+    return GuardianSession.station_id == station_id
+
+
 def guardian_babies(db: Session, phone: str) -> list[BabyView]:
     patients = db.scalars(
         select(Patient)
@@ -55,10 +62,15 @@ def guardian_babies(db: Session, phone: str) -> list[BabyView]:
 
 
 def login(
-    db: Session, clock: Clock, config: Config, *, station: Station, phone: str, baby_id: str
+    db: Session, clock: Clock, config: Config, *,
+    station: Station | None, client_ip: str | None, phone: str, baby_id: str,
 ) -> tuple[str, list[BabyView]]:
     now = clock.now()
-    station_key = f"station:{station.id}"
+    # 제출처 토큰이 없으면(일반 병원 기기) 접속 IP별로 잠근다.
+    station_key = (
+        f"station:{station.id}" if station is not None else f"guestip:{client_ip or 'unknown'}"
+    )
+    station_id = station.id if station is not None else None
     lockout.ensure_not_locked(db, station_key, now, _STATION_LOCKED)
 
     def station_failure() -> None:
@@ -97,14 +109,14 @@ def login(
     lockout.clear(db, phone_key)
     db.execute(
         delete(GuardianSession).where(
-            GuardianSession.station_id == station.id,
+            _same_station(station_id),
             GuardianSession.last_seen_at < now - timedelta(seconds=config.guardian_idle_seconds),
         )
     )
     raw, hashed = new_token()
     db.add(
         GuardianSession(
-            token_hash=hashed, phone=number, station_id=station.id,
+            token_hash=hashed, phone=number, station_id=station_id,
             created_at=now, last_seen_at=now,
         )
     )
@@ -113,14 +125,16 @@ def login(
 
 
 def authenticate(
-    db: Session, clock: Clock, config: Config, *, station: Station, raw_token: str | None
+    db: Session, clock: Clock, config: Config, *, station: Station | None, raw_token: str | None
 ) -> GuardianSession:
+    """세션의 제출처와 요청의 제출처(없으면 None)가 같아야 한다. 일반 기기·제출처 세션은 섞이지 않는다."""
     if not raw_token:
         raise Unauthorized(_NEED_LOGIN)
+    station_id = station.id if station is not None else None
     session = db.scalar(
         select(GuardianSession).where(
             GuardianSession.token_hash == hash_token(raw_token),
-            GuardianSession.station_id == station.id,
+            _same_station(station_id),
         )
     )
     if session is None:

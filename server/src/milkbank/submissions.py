@@ -26,6 +26,8 @@ from .models import (
     SubmissionStatus,
 )
 
+GENERAL_DEVICE_NAME = "병원 기기"
+
 
 def submit(
     db: Session, clock: Clock, config: Config, *,
@@ -70,14 +72,14 @@ def pending(db: Session) -> list[PendingView]:
     rows = db.execute(
         select(Submission, Patient, Station.name)
         .join(Patient, Patient.id == Submission.patient_id)
-        .join(Station, Station.id == Submission.station_id)
+        .outerjoin(Station, Station.id == Submission.station_id)
         .where(Submission.status == SubmissionStatus.PENDING)
         .order_by(Submission.submitted_at, Submission.id)
     ).all()
     return [
         PendingView(
             id=s.id, patient_id=p.id, baby_id=p.reg_no, balance=stock.balance(db, p.id),
-            station_name=station_name, submitted_at=s.submitted_at, count=s.count,
+            station_name=station_name or GENERAL_DEVICE_NAME, submitted_at=s.submitted_at, count=s.count,
             discharged=p.status == PatientStatus.DISCHARGED,
         )
         for s, p, station_name in rows
@@ -102,10 +104,11 @@ def confirm(
         raise Conflict("퇴원한 아기입니다. 반려만 할 수 있습니다")
     if not 1 <= count <= 100:
         raise BadRequest("팩 수는 1~100 사이여야 합니다")
-    station = db.get(Station, sub.station_id)
+    station = db.get(Station, sub.station_id) if sub.station_id is not None else None
+    source = station.name if station is not None else GENERAL_DEVICE_NAME
     record = stock.add_record(
         db, clock, patient_id=sub.patient_id, kind=RecordKind.INTAKE, count=count,
-        staff=staff, memo=f"{station.name} 제출분(제출 {sub.count}팩)",
+        staff=staff, memo=f"{source} 제출분(제출 {sub.count}팩)",
     )
     sub.status = SubmissionStatus.CONFIRMED
     sub.confirmed_count = count

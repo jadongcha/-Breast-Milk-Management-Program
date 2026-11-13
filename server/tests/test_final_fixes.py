@@ -169,6 +169,14 @@ def test_all_protected_routes_gated(client, app):
         fresh = login("fresh1", temp)
         nurse = login("gate-nurse", "newpass123")
         kw = {"json": {}} if method in ("POST", "PATCH") else {}
+        if (method, path) == ("POST", "/guardian/login"):
+            # 제출처 토큰은 선택이라 토큰 없는 로그인은 열려 있다(본문 검증 422).
+            # 제출처 토큰 헤더가 있다면 유효해야 한다. test_guardian_general.py 참고.
+            r = client.request(method, path, headers={"X-Station-Token": "bogus"}, **kw)
+            assert r.status_code == 401, (method, path, r.status_code)
+            r = client.request(method, path, headers={**auth(nurse), "X-Station-Token": "bogus"}, **kw)
+            assert r.status_code == 401, (method, path, r.status_code)
+            continue
         r = client.request(method, path, **kw)
         assert r.status_code == 401, (method, path, r.status_code)
         if path.startswith("/guardian/"):

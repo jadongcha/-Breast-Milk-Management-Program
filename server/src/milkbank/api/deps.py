@@ -91,7 +91,17 @@ def current_station(request: Request, db: DbDep) -> Station:
 StationDep = Annotated[Station, Depends(current_station)]
 
 
-def current_guardian(request: Request, db: DbDep, station: StationDep) -> GuardianSession:
+def optional_station(request: Request, db: DbDep) -> Station | None:
+    """헤더가 없으면 일반 병원 기기(None). 있으면 유효해야 한다(무효면 401 station_invalid)."""
+    if request.headers.get("X-Station-Token") is None:
+        return None
+    return station_service.authenticate_station(db, request.headers.get("X-Station-Token"))
+
+
+OptionalStationDep = Annotated[Station | None, Depends(optional_station)]
+
+
+def current_guardian(request: Request, db: DbDep, station: OptionalStationDep) -> GuardianSession:
     # 직원 세션 표는 보지 않는다. 만료된 세션 삭제가 저장되도록 실패 때도 commit한다.
     try:
         return guardian_service.authenticate(

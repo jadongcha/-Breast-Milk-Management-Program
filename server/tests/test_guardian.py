@@ -59,8 +59,11 @@ def test_bad_phone_format_is_400(client, world):
     assert r.json()["detail"] == "전화번호 형식이 올바르지 않습니다"
 
 
-def test_login_needs_station_token(client, world):
+def test_login_station_token_is_optional_but_must_be_valid_if_sent(client, world):
+    # 2-4단계: 제출처 토큰 없이도 로그인된다(일반 병원 기기, test_guardian_general.py).
     r = client.post("/guardian/login", json={"phone": PHONE, "baby_id": "DEMO-01"})
+    assert r.status_code == 200
+    r = _login(client, {"X-Station-Token": "bogus"})
     assert r.status_code == 401 and r.json()["code"] == "station_invalid"
 
 
@@ -153,9 +156,9 @@ def test_tokens_do_not_cross(client, admin_token, world):
     # A의 보호자 토큰 + B의 제출처 토큰
     r = client.get("/guardian/babies", headers=_gauth(world["b"], gtoken))
     assert r.status_code == 401
-    # 제출처 토큰 없이
+    # 제출처 토큰 없이: 제출처 세션은 일반 기기에서 쓸 수 없다
     r = client.get("/guardian/babies", headers=auth(gtoken))
-    assert r.status_code == 401 and r.json()["code"] == "station_invalid"
+    assert r.status_code == 401 and r.json()["detail"] == "로그인이 필요합니다"
     # 제출처 토큰만 있고 보호자 토큰 없음
     assert client.get("/guardian/babies", headers=world["a"]).status_code == 401
     # 원래 쌍은 여전히 유효
