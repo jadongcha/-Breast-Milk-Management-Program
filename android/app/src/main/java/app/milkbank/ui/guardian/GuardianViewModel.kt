@@ -34,7 +34,7 @@ sealed interface GuardianStep {
     data class Done(val baby: BabyDto, val count: Int, val balance: Int, val pendingCount: Int) : GuardianStep
 }
 
-/** Guardian session on a station tablet. The guardian token lives here only; logout and idle drop everything. */
+/** Guardian session on a station tablet or a general hospital device. The guardian token lives here only; logout and idle drop everything. */
 class GuardianViewModel(
     private val guardian: () -> GuardianRepository,
     /** The station tablet's token; null on a general hospital device, where requests go without one. */

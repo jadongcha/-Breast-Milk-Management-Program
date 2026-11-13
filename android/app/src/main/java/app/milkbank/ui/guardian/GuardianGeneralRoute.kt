@@ -53,7 +53,7 @@ fun GuardianGeneralRoute(container: AppContainer, onExit: () -> Unit) {
     BackHandler(onBack = leave)
 
     Column(Modifier.fillMaxSize()) {
-        TextButton(onClick = leave, modifier = Modifier.padding(start = 8.dp, top = 8.dp).heightIn(min = 56.dp)) {
+        TextButton(onClick = leave, modifier = Modifier.padding(start = 8.dp, top = 8.dp).heightIn(min = 64.dp)) {
             Text(stringResource(R.string.login_back_to_choice))
         }
         GuardianFlow(vm, stringResource(R.string.guardian_general_header))

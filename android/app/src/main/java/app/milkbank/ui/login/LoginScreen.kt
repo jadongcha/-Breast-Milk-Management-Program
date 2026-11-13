@@ -1,5 +1,6 @@
 package app.milkbank.ui.login
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,7 @@ fun LoginScreen(
     var menuOpen by remember { mutableStateOf(false) }
     // The permission notice (with its button) sits in the app-wide strip; here only drop the misleading network error.
     val permissionMissing = rememberLocalNetworkPermission().missing
+    BackHandler(enabled = staffChosen && !state.loading) { viewModel.clear(); staffChosen = false }
 
     LaunchedEffect(state.next) {
         state.next?.let {
@@ -65,7 +67,8 @@ fun LoginScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+        // Server re-registration stays on the staff side only: parents on the choice screen never see it.
+        if (staffChosen) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
             TextButton(onClick = { menuOpen = true }, modifier = Modifier.heightIn(min = 56.dp)) {
                 Text(stringResource(R.string.menu_more))
             }
