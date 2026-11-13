@@ -38,7 +38,7 @@ def test_new_db_is_at_head(tmp_path, clock):
     eng = make_engine(path)
     try:
         assert migrate(eng, path, clock.now()) is None
-        assert _version(eng) == "0002"
+        assert _version(eng) == "0003"
         tables = set(inspect(eng).get_table_names())
         assert {
             "staff", "auth_session", "patient", "stock_record", "login_attempt",
@@ -82,8 +82,8 @@ def test_pending_upgrade_makes_backup(tmp_path, clock):
             conn.commit()
         backup = migrate(eng, path, clock.now())
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0002.db"
-        assert _version(eng) == "0002"
+        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
+        assert _version(eng) == "0003"
     finally:
         eng.dispose()
 
@@ -352,9 +352,9 @@ def test_upgrade_0001_with_data_to_0002(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0001"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0002"
+        assert _version(eng) == "0003"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0002.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT count(*) FROM staff")).scalar() == 1
         assert {"station", "submission", "guardian_session"} <= set(
@@ -391,3 +391,81 @@ def test_station_name_unique_only_among_active(engine):
     with engine.begin() as conn:
         conn.execute(text("UPDATE station SET active = 0 WHERE name = 'A동'"))
     add("A동", 1)
+
+
+def test_upgrade_0002_with_data_to_0003(tmp_path, clock):
+    path = tmp_path / "u3.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            command.upgrade(_alembic_config(conn), "0002")
+            conn.commit()
+            conn.execute(
+                text(
+                    "INSERT INTO staff (username, name, role, password_hash,"
+                    " must_change_password, active, created_at)"
+                    " VALUES ('a', 'a', 'admin', 'h', 0, 1, '2026-11-10 00:00:00')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO patient (reg_no, baby_name, bed, guardian_name,"
+                    " guardian_phone, status, admitted_on, alert_enabled, alert_state,"
+                    " created_at)"
+                    " VALUES ('R1', 'b', '1', 'g', '01012345678', 'admitted',"
+                    " '2026-11-10', 0, 'normal', '2026-11-10 00:00:00')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO station (name, token_hash, active, created_at, created_by)"
+                    " VALUES ('A동', 'th', 1, '2026-11-10 00:00:00', 1)"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO guardian_session (token_hash, phone, station_id,"
+                    " created_at, last_seen_at)"
+                    " VALUES ('gh', '01012345678', 1, '2026-11-10 00:00:00',"
+                    " '2026-11-10 00:00:00')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO submission (patient_id, station_id, count,"
+                    " submitted_at, status)"
+                    " VALUES (1, 1, 2, '2026-11-10 00:00:00', 'pending')"
+                )
+            )
+            conn.commit()
+        assert _version(eng) == "0002"
+        backup = migrate(eng, path, clock.now())
+        assert _version(eng) == "0003"
+        assert backup is not None and backup.exists()
+        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
+        with eng.connect() as conn:
+            assert conn.execute(text("SELECT station_id FROM submission")).scalar() == 1
+            assert conn.execute(text("SELECT count(*) FROM submission")).scalar() == 1
+            assert (
+                conn.execute(text("SELECT station_id FROM guardian_session")).scalar()
+                == 1
+            )
+            assert conn.execute(text("SELECT count(*) FROM station")).scalar() == 1
+        with eng.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO guardian_session (token_hash, phone, station_id,"
+                    " created_at, last_seen_at)"
+                    " VALUES ('gh2', '01012345678', NULL, '2026-11-10 00:00:00',"
+                    " '2026-11-10 00:00:00')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO submission (patient_id, station_id, count,"
+                    " submitted_at, status)"
+                    " VALUES (1, NULL, 1, '2026-11-10 00:00:00', 'pending')"
+                )
+            )
+    finally:
+        eng.dispose()

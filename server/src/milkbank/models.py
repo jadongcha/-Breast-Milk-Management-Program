@@ -192,7 +192,7 @@ class Submission(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
-    station_id: Mapped[int] = mapped_column(ForeignKey("station.id"))
+    station_id: Mapped[int | None] = mapped_column(ForeignKey("station.id"))
     count: Mapped[int]
     submitted_at: Mapped[datetime] = mapped_column(UTCDateTime)
     status: Mapped[SubmissionStatus] = mapped_column(
@@ -212,6 +212,6 @@ class GuardianSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     token_hash: Mapped[str] = mapped_column(unique=True)
     phone: Mapped[str]
-    station_id: Mapped[int] = mapped_column(ForeignKey("station.id"))
+    station_id: Mapped[int | None] = mapped_column(ForeignKey("station.id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
