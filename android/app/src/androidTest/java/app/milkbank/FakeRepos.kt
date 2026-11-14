@@ -89,7 +89,7 @@ class FakeAuth(private val session: SessionManager) : AuthRepository {
 }
 
 class FakePatients(private val world: FakeWorld) : PatientRepository {
-    override suspend fun list(q: String?): ApiResult<List<PatientDto>> {
+    override suspend fun list(q: String?, includeDischarged: Boolean): ApiResult<List<PatientDto>> {
         val p = world.patient()
         val hit = q.isNullOrBlank() || p.regNo.contains(q.trim(), ignoreCase = true)
         return ApiResult.Ok(if (hit) listOf(p) else emptyList())
