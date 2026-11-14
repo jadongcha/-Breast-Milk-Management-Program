@@ -38,7 +38,7 @@ def test_new_db_is_at_head(tmp_path, clock):
     eng = make_engine(path)
     try:
         assert migrate(eng, path, clock.now()) is None
-        assert _version(eng) == "0004"
+        assert _version(eng) == "0005"
         tables = set(inspect(eng).get_table_names())
         assert {
             "staff", "auth_session", "patient", "stock_record", "login_attempt",
@@ -82,8 +82,8 @@ def test_pending_upgrade_makes_backup(tmp_path, clock):
             conn.commit()
         backup = migrate(eng, path, clock.now())
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
-        assert _version(eng) == "0004"
+        assert backup.name == "milkbank-20261110T000000Z-before-0005.db"
+        assert _version(eng) == "0005"
     finally:
         eng.dispose()
 
@@ -352,9 +352,9 @@ def test_upgrade_0001_with_data_to_0002(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0001"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0004"
+        assert _version(eng) == "0005"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0005.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT count(*) FROM staff")).scalar() == 1
         assert {"station", "submission", "guardian_session"} <= set(
@@ -440,9 +440,9 @@ def test_upgrade_0002_with_data_to_0003(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0002"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0004"
+        assert _version(eng) == "0005"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0005.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT station_id FROM submission")).scalar() == 1
             assert conn.execute(text("SELECT count(*) FROM submission")).scalar() == 1
@@ -514,9 +514,9 @@ def test_upgrade_0003_with_data_to_0004(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0003"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0004"
+        assert _version(eng) == "0005"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0005.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
             assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
@@ -559,5 +559,148 @@ def test_downgrade_0004_to_0003(tmp_path, clock):
             assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
             assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
             assert conn.execute(text("SELECT reg_no FROM patient")).scalar() == "R1"
+    finally:
+        eng.dispose()
+
+
+def _at_0004(eng, conn):
+    command.upgrade(_alembic_config(conn), "0004")
+    conn.commit()
+    conn.execute(
+        text(
+            "INSERT INTO staff (username, name, role, password_hash,"
+            " must_change_password, active, created_at)"
+            " VALUES ('a', 'a', 'admin', 'h', 0, 1, '2026-11-10 00:00:00')"
+        )
+    )
+    for i in (1, 2):
+        conn.execute(
+            text(
+                "INSERT INTO patient (reg_no, baby_name, bed, guardian_name,"
+                " guardian_phone, status, admitted_on, alert_enabled, alert_state,"
+                " created_at)"
+                f" VALUES ('R{i}', 'b', '1', 'g', '01012345678', 'admitted',"
+                " '2026-11-10', 0, 'normal', '2026-11-10 00:00:00')"
+            )
+        )
+
+
+def _rec(conn, patient, kind, count, minute, ml=None, target=None):
+    conn.execute(
+        text(
+            "INSERT INTO stock_record (patient_id, kind, count, ml, target_id,"
+            " staff_id, created_at) VALUES (:p, :k, :c, :ml, :t, 1, :at)"
+        ),
+        {"p": patient, "k": kind, "c": count, "ml": ml, "t": target,
+         "at": f"2026-11-10 00:{minute:02d}:00"},
+    )
+    return conn.execute(text("SELECT max(id) FROM stock_record")).scalar()
+
+
+def test_upgrade_0004_builds_packs_matching_balance(tmp_path, clock):
+    path = tmp_path / "p5.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            _at_0004(eng, conn)
+            in1 = _rec(conn, 1, "in", 3, 1, ml=240)
+            _rec(conn, 1, "in", 2, 2)
+            use = _rec(conn, 1, "use", 2, 3)
+            disc = _rec(conn, 1, "discard", 1, 4)
+            _rec(conn, 1, "cancel", 1, 5, target=disc)
+            in3 = _rec(conn, 1, "in", 1, 6, ml=100)
+            _rec(conn, 1, "cancel", 1, 7, target=in3)
+            _rec(conn, 2, "in", 3, 8, ml=100)
+            conn.commit()
+        migrate(eng, path, clock.now())
+        assert _version(eng) == "0005"
+        with eng.connect() as conn:
+            stock = conn.execute(
+                text("SELECT ml, in_record_id FROM pack"
+                     " WHERE patient_id = 1 AND out_record_id IS NULL ORDER BY id")
+            ).fetchall()
+            assert [r[0] for r in stock] == [80, None, None]
+            assert stock[0][1] == in1
+            used = conn.execute(
+                text("SELECT in_record_id FROM pack WHERE out_record_id = :u"),
+                {"u": use},
+            ).fetchall()
+            assert [r[0] for r in used] == [in1, in1]
+            assert conn.execute(
+                text("SELECT count(*) FROM pack WHERE patient_id = 1")
+            ).scalar() == 5
+            b = conn.execute(
+                text("SELECT ml FROM pack WHERE patient_id = 2 AND out_record_id IS NULL")
+            ).fetchall()
+            assert [r[0] for r in b] == [None, None, None]
+            assert conn.execute(
+                text("SELECT count(*) FROM stock_record WHERE ml_unknown != 0")
+            ).scalar() == 0
+    finally:
+        eng.dispose()
+
+
+def test_upgrade_0004_pending_submission_pack_mls(tmp_path, clock):
+    path = tmp_path / "p5s.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            _at_0004(eng, conn)
+            for count, ml, status in ((3, 240, "pending"), (3, 100, "pending"),
+                                      (2, 100, "confirmed")):
+                conn.execute(
+                    text(
+                        "INSERT INTO submission (patient_id, station_id, count, ml,"
+                        " submitted_at, status)"
+                        " VALUES (1, NULL, :c, :ml, '2026-11-10 00:00:00', :s)"
+                    ),
+                    {"c": count, "ml": ml, "s": status},
+                )
+            conn.commit()
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            rows = conn.execute(text("SELECT pack_mls FROM submission ORDER BY id")).fetchall()
+        assert [r[0] for r in rows] == ["[80, 80, 80]", "[null, null, null]", None]
+    finally:
+        eng.dispose()
+
+
+def test_upgrade_0004_aborts_on_mismatch(tmp_path, clock):
+    path = tmp_path / "p5m.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            _at_0004(eng, conn)
+            _rec(conn, 1, "in", 1, 1)
+            _rec(conn, 1, "use", 3, 2)
+            conn.commit()
+        with pytest.raises(RuntimeError, match="팩 옮기기 결과가 잔량과 다릅니다: 환자 1"):
+            migrate(eng, path, clock.now())
+        assert _version(eng) == "0004"
+        assert "pack" not in inspect(eng).get_table_names()
+    finally:
+        eng.dispose()
+
+
+def test_downgrade_0005_to_0004(tmp_path, clock):
+    path = tmp_path / "d4.db"
+    eng = make_engine(path)
+    try:
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            _seed_0003(conn)
+            conn.commit()
+            with foreign_keys_off(conn):
+                command.downgrade(_alembic_config(conn), "0004")
+            conn.commit()
+        assert _version(eng) == "0004"
+        insp = inspect(eng)
+        assert "pack" not in insp.get_table_names()
+        cols = lambda t: {c["name"] for c in insp.get_columns(t)}
+        assert "ml_unknown" not in cols("stock_record")
+        assert "pack_mls" not in cols("submission")
+        with eng.connect() as conn:
+            assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
+            assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
     finally:
         eng.dispose()

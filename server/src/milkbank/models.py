@@ -145,12 +145,30 @@ class StockRecord(Base):
     kind: Mapped[RecordKind] = mapped_column(_enum_type(RecordKind))
     count: Mapped[int]
     ml: Mapped[int | None]
+    ml_unknown: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     discard_reason: Mapped[DiscardReason | None] = mapped_column(
         _enum_type(DiscardReason)
     )
     target_id: Mapped[int | None] = mapped_column(ForeignKey("stock_record.id"))
     memo: Mapped[str | None]
     staff_id: Mapped[int] = mapped_column(ForeignKey("staff.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class Pack(Base):
+    __tablename__ = "pack"
+
+    __table_args__ = (
+        Index("ix_pack_patient_out", "patient_id", "out_record_id"),
+        Index("ix_pack_in_record", "in_record_id"),
+        Index("ix_pack_out_record", "out_record_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
+    ml: Mapped[int | None]
+    in_record_id: Mapped[int] = mapped_column(ForeignKey("stock_record.id"))
+    out_record_id: Mapped[int | None] = mapped_column(ForeignKey("stock_record.id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
@@ -203,6 +221,7 @@ class Submission(Base):
     )
     confirmed_count: Mapped[int | None]
     confirmed_ml: Mapped[int | None]
+    pack_mls: Mapped[str | None]  # JSON 문자열, 예: "[80, null, 100]"
     handled_by: Mapped[int | None] = mapped_column(ForeignKey("staff.id"))
     handled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     intake_record_id: Mapped[int | None] = mapped_column(ForeignKey("stock_record.id"))
