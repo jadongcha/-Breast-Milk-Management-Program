@@ -48,8 +48,6 @@ fun MlField(text: String, onChange: (String) -> Unit, label: String, modifier: M
     }
 }
 
-
-
 /** "3팩 · 240mL", or "3팩" without a volume. */
 @Composable
 fun packsWithMl(count: Int, ml: Int?): String =

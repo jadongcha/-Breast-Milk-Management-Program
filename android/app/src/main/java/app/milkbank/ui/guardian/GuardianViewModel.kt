@@ -32,7 +32,10 @@ sealed interface GuardianStep {
     data class Start(val phone: String, val babyId: String, val error: String?, val submitting: Boolean) : GuardianStep
     data class SelectBaby(val babies: List<BabyDto>) : GuardianStep
     data class Stock(val baby: BabyDto, val notice: String? = null) : GuardianStep
-    data class PickCount(val baby: BabyDto, val count: Int?, val mlText: String = "") : GuardianStep
+    data class PickCount(val baby: BabyDto, val count: Int?, val mlText: String = "") : GuardianStep {
+        /** The pack buttons stay off while the volume text is out of range; the field's error line says why. */
+        val packButtonsEnabled: Boolean get() = parseMl(mlText) != MlParse.Invalid
+    }
     data class ConfirmSubmit(val baby: BabyDto, val count: Int, val ml: Int?) : GuardianStep
     data class Done(val baby: BabyDto, val count: Int, val ml: Int?, val balance: Int, val pendingCount: Int) : GuardianStep
 }

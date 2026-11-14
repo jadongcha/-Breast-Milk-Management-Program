@@ -36,6 +36,8 @@ import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
 import app.milkbank.ui.components.MlField
+import app.milkbank.ui.components.MlParse
+import app.milkbank.ui.components.parseMl
 
 private val BUTTON_MIN_HEIGHT = 64.dp
 
@@ -179,14 +181,15 @@ private fun StockStep(s: GuardianStep.Stock, vm: GuardianViewModel, online: Bool
 private fun PickStep(baby: BabyDto, mlText: String, vm: GuardianViewModel) {
     Title(stringResource(R.string.guardian_count_title))
     Text(baby.babyId, style = MaterialTheme.typography.titleLarge)
+    MlField(mlText, vm::setMl, stringResource(R.string.guardian_ml_label), Modifier.fillMaxWidth(), fieldModifier = Modifier.heightIn(min = 64.dp))
+    val packsEnabled = parseMl(mlText) != MlParse.Invalid
     for (row in listOf(1..5, 6..10)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             for (n in row) {
-                GuardianButton(n.toString(), { vm.pickCount(n) }, Modifier.weight(1f))
+                GuardianButton(n.toString(), { vm.pickCount(n) }, Modifier.weight(1f), enabled = packsEnabled)
             }
         }
     }
-    MlField(mlText, vm::setMl, stringResource(R.string.guardian_ml_label), Modifier.fillMaxWidth(), fieldModifier = Modifier.heightIn(min = 64.dp))
     GuardianButton(stringResource(R.string.back), vm::back, Modifier.fillMaxWidth(), outlined = true)
 }
 

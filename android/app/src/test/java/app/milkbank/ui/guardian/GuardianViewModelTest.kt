@@ -149,6 +149,20 @@ class GuardianViewModelTest {
         assertEquals(GuardianStep.PickCount(b1, null, "0"), vm.step.value)
     }
 
+    @Test fun packButtons_disabledWhileMlInvalid_enabledWhenValidOrEmpty() {
+        val vm = vm()
+        login(vm)
+        val pick = { vm.step.value as GuardianStep.PickCount }
+        vm.startSubmit()
+        assertEquals(true, pick().packButtonsEnabled) // empty
+        vm.setMl("0")
+        assertEquals(false, pick().packButtonsEnabled)
+        vm.setMl("20001")
+        assertEquals(false, pick().packButtonsEnabled)
+        vm.setMl("240")
+        assertEquals(true, pick().packButtonsEnabled)
+    }
+
     @Test fun back_keepsMlText() {
         val vm = vm()
         toConfirm(vm, "240")
