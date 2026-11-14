@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 
 from .. import discharge as discharge_service
+from .. import packs as pack_service
 from .. import patients as patient_service
 from .. import stock as stock_service
 from ..models import Staff
@@ -10,6 +11,7 @@ from ..schemas import (
     DischargeIn,
     PatientCreate,
     PatientDetail,
+    PackOut,
     PatientOut,
     PatientUpdate,
     RecordOut,
@@ -23,8 +25,15 @@ AdminDep = Annotated[Staff, Depends(require_admin)]
 
 
 def _out(db, patient) -> PatientOut:
-    base = {k: getattr(patient, k) for k in PatientOut.model_fields if k != "balance"}
-    return PatientOut(**base, balance=stock_service.balance(db, patient.id))
+    derived = {"balance", "balance_ml", "unknown_ml_packs"}
+    base = {k: getattr(patient, k) for k in PatientOut.model_fields if k not in derived}
+    summary = pack_service.summary(db, patient.id)
+    return PatientOut(
+        **base,
+        balance=stock_service.balance(db, patient.id),
+        balance_ml=summary.ml,
+        unknown_ml_packs=summary.unknown,
+    )
 
 
 @router.get("", response_model=list[PatientOut])
@@ -40,7 +49,8 @@ def get_patient(patient_id: int, db: DbDep, _: StaffDep):
     records = [
         RecordOut.model_validate(v) for v in stock_service.recent_records(db, patient.id, 50)
     ]
-    return PatientDetail(**_out(db, patient).model_dump(), records=records)
+    stock_packs = [PackOut.model_validate(v) for v in pack_service.in_stock(db, patient.id)]
+    return PatientDetail(**_out(db, patient).model_dump(), records=records, packs=stock_packs)
 
 
 @router.post("", response_model=PatientOut, status_code=201)

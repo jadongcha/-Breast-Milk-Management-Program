@@ -112,7 +112,7 @@ def confirm(
     source = station.name if station is not None else GENERAL_DEVICE_NAME
     record = stock.add_record(
         db, clock, patient_id=sub.patient_id, kind=RecordKind.INTAKE, count=count,
-        ml=ml, staff=staff, memo=f"{source} 제출분(제출 {sub.count}팩)",
+        pack_mls=[None] * count, staff=staff, memo=f"{source} 제출분(제출 {sub.count}팩)",
     )
     sub.status = SubmissionStatus.CONFIRMED
     sub.confirmed_count = count

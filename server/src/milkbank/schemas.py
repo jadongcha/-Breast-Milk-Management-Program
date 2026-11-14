@@ -122,6 +122,8 @@ class PatientOut(BaseModel):
     days_threshold: int | None
     packs_threshold: int | None
     balance: int
+    balance_ml: int
+    unknown_ml_packs: int
 
 
 class DischargeIn(BaseModel):
@@ -132,7 +134,8 @@ class DischargeIn(BaseModel):
 class RecordIn(BaseModel):
     kind: Literal["intake", "use", "discard"]
     count: int
-    ml: int | None = None
+    pack_mls: list[int | None] | None = None
+    pack_ids: list[int] | None = None
     discard_reason: DiscardReason | None = None
     memo: str | None = None
 
@@ -144,6 +147,7 @@ class RecordOut(BaseModel):
     kind: RecordKind
     count: int
     ml: int | None
+    ml_unknown: int
     discard_reason: DiscardReason | None
     target_id: int | None
     memo: str | None
@@ -156,10 +160,21 @@ class RecordOut(BaseModel):
 class RecordResult(BaseModel):
     record: RecordOut
     balance: int
+    balance_ml: int
+    unknown_ml_packs: int
+
+
+class PackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ml: int | None
+    created_at: datetime
 
 
 class PatientDetail(PatientOut):
     records: list[RecordOut]
+    packs: list[PackOut]
 
 
 class StationCreateIn(BaseModel):

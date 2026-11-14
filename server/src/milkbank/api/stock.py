@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from .. import packs as pack_service
 from .. import stock as stock_service
 from ..models import RecordKind, Staff
 from ..schemas import RecordIn, RecordOut, RecordResult
@@ -19,9 +20,12 @@ _KINDS = {
 
 
 def _result(db, record) -> RecordResult:
+    summary = pack_service.summary(db, record.patient_id)
     return RecordResult(
         record=RecordOut.model_validate(stock_service.record_view(db, record)),
         balance=stock_service.balance(db, record.patient_id),
+        balance_ml=summary.ml,
+        unknown_ml_packs=summary.unknown,
     )
 
 
@@ -38,7 +42,8 @@ def add_record(
         staff=staff,
         discard_reason=body.discard_reason,
         memo=body.memo,
-        ml=body.ml,
+        pack_mls=body.pack_mls,
+        pack_ids=body.pack_ids,
     )
     return _result(db, record)
 

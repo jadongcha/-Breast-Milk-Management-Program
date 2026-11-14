@@ -21,7 +21,7 @@ def _gtoken(client, st):
 
 def test_record_with_ml(client, nurse_token, world):
     pid = world["p1"]
-    r = _record(client, nurse_token, pid, kind="intake", count=3, ml=240)
+    r = _record(client, nurse_token, pid, kind="intake", count=3, pack_mls=[80, 80, 80])
     assert r.status_code == 201, r.text
     assert r.json()["record"]["ml"] == 240
     detail = client.get(f"/patients/{pid}", headers=auth(nurse_token)).json()
@@ -32,15 +32,17 @@ def test_record_with_ml(client, nurse_token, world):
 
 def test_record_ml_range(client, nurse_token, world):
     pid = world["p1"]
-    for bad in (0, 20001):
-        r = _record(client, nurse_token, pid, kind="intake", count=1, ml=bad)
-        assert r.status_code == 400 and r.json()["detail"] == MSG
-    assert _record(client, nurse_token, pid, kind="intake", count=1, ml=20000).status_code == 201
+    for bad in (0, 1001):
+        r = _record(client, nurse_token, pid, kind="intake", count=1, pack_mls=[bad])
+        assert r.status_code == 400 and r.json()["detail"] == "팩 용량은 1~1000mL 사이여야 합니다"
+    assert _record(client, nurse_token, pid, kind="intake", count=1, pack_mls=[1000]).status_code == 201
 
 
 def test_cancel_copies_ml(client, nurse_token, world):
     pid = world["p1"]
-    rec = _record(client, nurse_token, pid, kind="intake", count=3, ml=240).json()["record"]
+    rec = _record(
+        client, nurse_token, pid, kind="intake", count=3, pack_mls=[80, 80, 80]
+    ).json()["record"]
     r = client.post(f"/records/{rec['id']}/cancel", headers=auth(nurse_token))
     assert r.status_code == 201, r.text
     assert r.json()["record"]["ml"] == 240
@@ -70,10 +72,12 @@ def test_confirm_ml_default_and_clear(client, nurse_token, world):
         assert r.status_code == 200, r.text
         return r.json()
 
+    # 입고 기록의 용량은 이제 팩 용량(pack_mls)에서 나온다. 확인 입력의 pack_mls는 3번 작업에서 연결하며,
+    # 그때까지 확인으로 생긴 팩은 용량을 모른다(기록 ml은 null).
     a = confirm(0, {"count": 3})
-    assert a["submission"]["confirmed_ml"] == 240 and a["record"]["ml"] == 240
+    assert a["submission"]["confirmed_ml"] == 240 and a["record"]["ml"] is None
     b = confirm(1, {"count": 3, "ml": 200})
-    assert b["submission"]["confirmed_ml"] == 200 and b["record"]["ml"] == 200
+    assert b["submission"]["confirmed_ml"] == 200 and b["record"]["ml"] is None
     c = confirm(2, {"count": 3, "ml": None})
     assert c["submission"]["confirmed_ml"] is None and c["record"]["ml"] is None
     assert c["submission"]["ml"] == 240

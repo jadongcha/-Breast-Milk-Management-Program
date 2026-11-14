@@ -110,10 +110,11 @@ def test_overview_rows_and_summary(client, app, clock, admin_token):
         db.get(Patient, ok).bed = "10"
         db.get(Patient, gone).status = PatientStatus.DISCHARGED
         db.commit()
-    _rec(client, admin_token, low, kind="intake", count=2, ml=160)
-    _rec(client, admin_token, ok, kind="intake", count=1, ml=80)
+    _rec(client, admin_token, low, kind="intake", count=2, pack_mls=[80, 80])
     _rec(client, admin_token, ok, kind="intake", count=7)
     _rec(client, admin_token, ok, kind="intake", count=2)
+    # 먼저 들어온 팩부터 나가므로, 용량을 아는 팩은 맨 뒤에 넣어 아래 사용 1팩이 용량 모름이 되게 한다.
+    _rec(client, admin_token, ok, kind="intake", count=1, pack_mls=[80])
     _rec(client, admin_token, ok, kind="use", count=1)
     with app.state.session_factory() as db:
         db.add(

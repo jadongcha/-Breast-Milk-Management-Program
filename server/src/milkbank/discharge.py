@@ -9,6 +9,7 @@ from typing import Literal
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from . import packs
 from . import settings as settings_service
 from . import stock
 from .clock import Clock
@@ -52,12 +53,14 @@ def discharge(
         else:
             kind, reason = RecordKind.RETURN, None
         # 간호사 입력 한도(1~100팩)는 적용하지 않고 잔량 전부를 한 기록으로 남긴다.
-        db.add(StockRecord(
+        record = StockRecord(
             patient_id=patient_id, kind=kind, count=left, ml=None,
             discard_reason=reason, target_id=None, memo=None,
             staff_id=staff.id, created_at=clock.now(),
-        ))
+        )
+        db.add(record)
         db.flush()
+        packs.take(db, record, None)
     patient.status = PatientStatus.DISCHARGED
     patient.discharged_on = kst_today(clock)
     db.flush()
