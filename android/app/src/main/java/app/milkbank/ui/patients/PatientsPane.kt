@@ -53,6 +53,7 @@ import app.milkbank.ui.PatientDetail
 import app.milkbank.ui.PatientForm
 import app.milkbank.ui.GuardianHome
 import app.milkbank.ui.Staff
+import app.milkbank.ui.AdminOverview
 import app.milkbank.ui.AdminSettings
 import app.milkbank.ui.Stations
 import app.milkbank.ui.navigateClearingStack
@@ -171,6 +172,11 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                             )
                             if (isAdmin) {
                                 HorizontalDivider()
+                                DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
+                                    text = { Text(stringResource(R.string.menu_overview)) },
+                                    onClick = { menuOpen = false; navController.navigate(AdminOverview) },
+                                )
                                 DropdownMenuItem(
                                     modifier = Modifier.heightIn(min = 56.dp),
                                     text = { Text(stringResource(R.string.menu_admin_patient_form)) },

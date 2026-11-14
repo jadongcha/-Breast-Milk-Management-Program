@@ -22,6 +22,8 @@ import app.milkbank.R
 import app.milkbank.core.SystemClock
 import app.milkbank.ui.admin.PatientFormScreen
 import app.milkbank.ui.admin.PatientFormViewModel
+import app.milkbank.ui.admin.OverviewScreen
+import app.milkbank.ui.admin.OverviewViewModel
 import app.milkbank.ui.admin.SettingsScreen
 import app.milkbank.ui.admin.SettingsViewModel
 import app.milkbank.ui.admin.StaffScreen
@@ -148,6 +150,19 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 },
             )
             StationsScreen(vm, onBack = { navController.popBackStack() })
+        }
+        composable<AdminOverview> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            val unexpected = stringResource(R.string.network_error)
+            val vm: OverviewViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer { OverviewViewModel({ container.admin }, unexpected, logUnexpected("overview failed")) }
+                },
+            )
+            OverviewScreen(
+                vm, onBack = { navController.popBackStack() },
+                onOpenPatient = { navController.navigate(PatientDetail(it)) },
+            )
         }
         composable<AdminSettings> {
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
