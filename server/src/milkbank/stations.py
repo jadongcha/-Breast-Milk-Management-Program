@@ -7,6 +7,7 @@ from .clock import Clock
 from .errors import BadRequest, Conflict, NotFound, Unauthorized
 from .models import GuardianSession, Staff, Station
 from .security import hash_token, new_token
+from .submissions import GENERAL_DEVICE_NAME
 
 MAX_NAME_LEN = 20
 _DUP = "이미 있는 제출처 이름입니다"
@@ -18,6 +19,8 @@ def create_station(
     name = name.strip()
     if not 1 <= len(name) <= MAX_NAME_LEN:
         raise BadRequest("제출처 이름은 1~20자로 입력해 주세요")
+    if name == GENERAL_DEVICE_NAME:
+        raise BadRequest("‘병원 기기’는 제출처 이름으로 쓸 수 없습니다")
     if db.scalar(select(Station.id).where(Station.name == name, Station.active)) is not None:
         raise Conflict(_DUP)
     raw, hashed = new_token()

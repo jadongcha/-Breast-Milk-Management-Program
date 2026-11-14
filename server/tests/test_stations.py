@@ -33,6 +33,13 @@ def test_station_name_rules(client, admin_token):
     assert _create(client, admin_token, "외래").status_code == 201
 
 
+def test_station_name_general_device_reserved(client, admin_token):
+    r = _create(client, admin_token, "  병원 기기 ")
+    assert r.status_code == 400
+    assert r.json()["detail"] == "‘병원 기기’는 제출처 이름으로 쓸 수 없습니다"
+    assert client.get("/stations", headers=auth(admin_token)).json() == []
+
+
 def test_nurse_cannot_manage_stations(client, nurse_token):
     assert _create(client, nurse_token).status_code == 403
     assert client.get("/stations", headers=auth(nurse_token)).status_code == 403
