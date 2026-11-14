@@ -274,3 +274,25 @@ class RejectIn(BaseModel):
 
 class RejectResult(BaseModel):
     submission: SubmissionOut
+
+
+class OverviewRow(BaseModel):
+    patient_id: int
+    baby_id: str
+    bed: str
+    balance: int
+    daily_avg: float | None
+    days_left: float | None
+    status: Literal["enough", "low", "empty"]
+    pending_packs: int
+
+
+class OverviewOut(BaseModel):
+    admitted: int
+    low: int
+    today_in_packs: int
+    today_in_ml: int | None
+    today_use_packs: int
+    today_use_ml: int | None
+    pending_submissions: int
+    rows: list[OverviewRow]
