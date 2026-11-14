@@ -141,6 +141,8 @@ class PatientDetailViewModel(
     fun openDialog(kind: String) {
         if (_submitting.value || kind !in STOCK_KINDS) return
         updateDialog(StockDialogState(kind, if (kind == "use") 1 else null))
+        // The preview and the choice must match the server, which may have changed since the last load.
+        if (kind != "intake") refresh()
     }
 
     fun closeDialog() {
@@ -262,10 +264,10 @@ class PatientDetailViewModel(
                         if (regNo != null) {
                             banner.post(ResultBanner(regNo, p.kind, p.count, r.value.balance, r.value.balanceMl, r.value.unknownMlPacks))
                         } else banner.notifyChanged()
-                        reloadPacks()
+                        reloadDetail()
                     }
                     // 401: the interceptor already ended the session and MainActivity shows the login screen.
-                    is ApiResult.Err -> onWriteFailed(r.error)
+                    is ApiResult.Err -> onWriteFailed(r.error, refetchOnConflict = true)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -299,7 +301,7 @@ class PatientDetailViewModel(
                         _message.value = savedMessage
                         regNo?.let { banner.updateBalance(it, r.value.balance, r.value.balanceMl, r.value.unknownMlPacks) }
                         banner.notifyChanged()
-                        reloadPacks()
+                        reloadDetail()
                     }
                     is ApiResult.Err -> onWriteFailed(r.error)
                 }
@@ -318,43 +320,41 @@ class PatientDetailViewModel(
     /**
      * A failure without an HTTP status (timeout, lost connection) may have happened after the server saved
      * the record: show the server's real state and say that saving is uncertain.
+     * A 409 means the packs changed under the window: show the message and the server's current packs.
      */
-    private suspend fun onWriteFailed(error: ApiError) {
-        if (error.status != null) {
+    private suspend fun onWriteFailed(error: ApiError, refetchOnConflict: Boolean = false) {
+        if (error.status == null) {
+            _error.value = "${error.message}\n$saveUncertainMessage"
+        } else {
             _error.value = error.message
-            return
+            if (error.status != 409 || !refetchOnConflict) return
         }
-        _error.value = "${error.message}\n$saveUncertainMessage"
+        fetchDetail()
+    }
+
+    /** After a write: fetch the whole detail again (pack list, balance, records) in the background. */
+    private fun reloadDetail() {
         refreshJob?.cancel()
-        writeSeq++ // an older in-flight refresh must not overwrite the one below
+        refreshJob = viewModelScope.launch { fetchDetail() }
+    }
+
+    /**
+     * Takes the whole detail from the server unless a write was applied meanwhile.
+     * A failure is shown (without replacing a message that is already there), never swallowed.
+     */
+    private suspend fun fetchDetail() {
+        writeSeq++ // an older in-flight refresh must not overwrite this one
         val startedAt = writeSeq
         try {
-            val r = patientRepo().detail(patientId)
-            if (r is ApiResult.Ok && startedAt == writeSeq) setDetail(r.value)
+            when (val r = patientRepo().detail(patientId)) {
+                is ApiResult.Ok -> if (startedAt == writeSeq) setDetail(r.value)
+                is ApiResult.Err -> if (_error.value == null) _error.value = r.error.message
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             onError(e)
-        }
-    }
-
-    /**
-     * A write changes which packs are left but its answer does not list them: fetch the list again.
-     * Only the pack list is taken from it, so the balance and records from the write answer stay as they are.
-     */
-    private fun reloadPacks() {
-        viewModelScope.launch {
-            try {
-                val r = patientRepo().detail(patientId)
-                if (r is ApiResult.Ok) {
-                    _detail.update { it?.copy(packs = r.value.packs) }
-                    syncDialog()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                onError(e)
-            }
+            if (_error.value == null) _error.value = unexpectedError
         }
     }
 

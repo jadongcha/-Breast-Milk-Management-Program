@@ -207,19 +207,65 @@ class PatientDetailViewModelTest {
         assertFalse(v.dialog.value!!.choosing)
     }
 
-    @Test fun conflictOnChosenPacks_showsServerMessage() = runTest {
+    @Test fun openUseDialog_refreshesPreviewAfterAnotherDeviceWrote() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        // Another device used packs 1 and 2 meanwhile.
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 2, packs = packs.drop(2)).copy(balanceMl = 100, unknownMlPacks = 1)) }
+        v.openDialog("use")
+        assertEquals(listOf(1), v.dialog.value!!.previewPacks.map { it.id }) // stale until the fetch lands
+        advanceUntilIdle()
+        assertEquals(listOf(3), v.dialog.value!!.previewPacks.map { it.id })
+        v.setCount(2)
+        assertEquals(listOf(3, 4), v.dialog.value!!.previewPacks.map { it.id })
+        assertEquals(listOf(3, 4), v.detail.value!!.packs.map { it.id })
+    }
+
+    @Test fun openIntakeDialog_doesNotRefetch() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        val before = patients.detailCalls
+        v.openDialog("intake"); advanceUntilIdle()
+        assertEquals(before, patients.detailCalls)
+    }
+
+    @Test fun conflictOnChosenPacks_showsMessageAndReloadsPacks() = runTest {
         stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(409, "고른 팩을 다시 확인해 주세요")) }
         val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
         v.openDialog("use"); v.setCount(1)
         v.openChoosePacks(); v.togglePack(3); v.finishChoosePacks()
-        v.submitDialog(); v.confirm(); advanceUntilIdle()
+        v.submitDialog()
+        assertEquals(listOf(3), v.dialog.value?.chosenPackIds ?: listOf(3))
+        // Pack 3 left on another device.
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 3, packs = packs.filter { it.id != 3 })) }
+        v.confirm(); advanceUntilIdle()
         assertEquals("고른 팩을 다시 확인해 주세요", v.error.value)
+        assertEquals(listOf(1, 2, 4), v.detail.value!!.packs.map { it.id })
+    }
+
+    @Test fun conflictOnChosenPacks_clearsTheChoiceInTheOpenDialog() = runTest {
+        stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(409, "고른 팩을 다시 확인해 주세요")) }
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(1)
+        v.openChoosePacks(); v.togglePack(3); v.finishChoosePacks()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 3, packs = packs.filter { it.id != 3 })) }
+        // The window stays open behind the confirmation when the nurse confirms from the dialog flow.
+        v.request("use", 1, null, null, packIds = listOf(3))
+        v.confirm(); advanceUntilIdle()
+        assertNull(v.dialog.value!!.chosenPackIds)
+        assertEquals(listOf(1), v.dialog.value!!.previewPacks.map { it.id })
+    }
+
+    @Test fun reloadAfterWriteFailing_isReported() = runTest {
+        stock.addHandler = { _, _, c, _, _ -> ApiResult.Ok(RecordResultDto(recordDto(100, count = c), 5)) }
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }
+        v.openDialog("intake"); v.setCount(1); v.submitDialog(); v.confirm(); advanceUntilIdle()
+        assertEquals("서버에 연결할 수 없습니다", v.error.value)
     }
 
     @Test fun success_carriesMlToDetailAndBanner_andReloadsPacks() = runTest {
         stock.addHandler = { _, _, c, _, _ -> ApiResult.Ok(RecordResultDto(recordDto(100, count = c), 6, balanceMl = 420, unknownMlPacks = 2)) }
         val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
-        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 6, packs = packs + PackDto(5, 80, t) + PackDto(6, 80, t))) }
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 6, packs = packs + PackDto(5, 80, t) + PackDto(6, 80, t)).copy(balanceMl = 420, unknownMlPacks = 2)) }
         v.openDialog("intake"); v.setCount(2); v.submitDialog(); v.confirm(); advanceUntilIdle()
         assertEquals(420, v.detail.value!!.balanceMl)
         assertEquals(2, v.detail.value!!.unknownMlPacks)
@@ -243,6 +289,7 @@ class PatientDetailViewModelTest {
 
     @Test fun intake_success_updatesBalanceRecordsSavedAndBanner() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 8, listOf(recordDto(100, count = 3), recordDto(50, staffId = 1, createdAt = clock.now())))) } // what the server returns after the write
         v.request("intake", 3, null, null)
         assertEquals(PendingAction("intake", 3, null, null), v.pending.value)
         v.confirm(); advanceUntilIdle()
@@ -269,6 +316,7 @@ class PatientDetailViewModelTest {
         val gate = CompletableDeferred<Unit>()
         stock.addHandler = { _, _, c, _, _ -> gate.await(); ApiResult.Ok(RecordResultDto(recordDto(100, count = c), 8)) }
         val v = vm(); v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 8, listOf(recordDto(100, count = 3), recordDto(50, staffId = 1, createdAt = clock.now())))) } // what the server returns after the write
         v.request("intake", 3, null, null)
         v.confirm(); v.confirm(); advanceUntilIdle()
         assertTrue(v.submitting.value)
@@ -324,6 +372,7 @@ class PatientDetailViewModelTest {
         val rec = recordDto(50, staffId = 1, createdAt = clock.now())
         v.askCancel(rec)
         assertEquals(rec, v.pendingCancel.value) // the record itself is held, not looked up again later
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 2, listOf(recordDto(101, kind = "cancel", targetId = 50), rec.copy(canceled = true)))) } // after the cancel
         v.cancelRecord(50); advanceUntilIdle()
         val d = v.detail.value!!
         assertEquals(2, d.balance)
@@ -351,7 +400,11 @@ class PatientDetailViewModelTest {
     @Test fun staleRefresh_doesNotOverwriteSavedResult() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
         val gate = CompletableDeferred<Unit>()
-        patients.detailHandler = { gate.await(); ApiResult.Ok(detailDto(7, "DEMO-1", 5, emptyList())) } // pre-write snapshot
+        var calls = 0
+        patients.detailHandler = {
+            if (calls++ == 0) { gate.await(); ApiResult.Ok(detailDto(7, "DEMO-1", 5, emptyList())) } // pre-write snapshot
+            else ApiResult.Ok(detailDto(7, "DEMO-1", 8, listOf(recordDto(100, count = 3)))) // after the write
+        }
         v.refresh(); advanceUntilIdle()
         v.request("intake", 3, null, null); v.confirm(); advanceUntilIdle()
         assertEquals(8, v.detail.value!!.balance)
@@ -430,12 +483,12 @@ class PatientDetailViewModelTest {
         assertNull(v.pendingCancel.value)
     }
 
-    @Test fun httpConflictOnAdd_noRefreshNoUncertainMessage() = runTest {
+    @Test fun httpConflictOnAdd_refetchesOnceNoUncertainMessage() = runTest {
         stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(409, "재고가 부족합니다 (현재 0팩)")) }
         val v = vm(); v.refresh(); advanceUntilIdle()
         val calls = patients.detailCalls
         v.request("use", 1, null, null); v.confirm(); advanceUntilIdle()
-        assertEquals(calls, patients.detailCalls)
+        assertEquals(calls + 1, patients.detailCalls) // the packs may have changed: look again
         assertEquals("재고가 부족합니다 (현재 0팩)", v.error.value)
     }
 
