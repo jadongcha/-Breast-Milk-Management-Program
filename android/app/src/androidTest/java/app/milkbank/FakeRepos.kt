@@ -63,19 +63,21 @@ val fakeAdminStaff = StaffDto(
 /** One patient whose balance the fake stock repository updates; shared by the fake repositories. */
 class FakeWorld {
     @Volatile var balance = 0
+    @Volatile var balanceMl = 0
+    @Volatile var unknownMlPacks = 0
     @Volatile var pending = 0
     val records = mutableListOf<RecordDto>()
 
     fun patient() = PatientDto(
         id = 10, regNo = FAKE_REG_NO, babyName = FAKE_BABY_NAME, bed = "3", guardianName = "보호자",
         guardianPhone = "010-0000-0000", status = "admitted", admittedOn = "2026-11-01",
-        alertEnabled = false, balance = balance,
+        alertEnabled = false, balance = balance, balanceMl = balanceMl, unknownMlPacks = unknownMlPacks,
     )
 
     fun detail() = PatientDetailDto(
         id = 10, regNo = FAKE_REG_NO, babyName = FAKE_BABY_NAME, bed = "3", guardianName = "보호자",
         guardianPhone = "010-0000-0000", status = "admitted", admittedOn = "2026-11-01",
-        alertEnabled = false, balance = balance, records = records.toList().reversed(),
+        alertEnabled = false, balance = balance, balanceMl = balanceMl, unknownMlPacks = unknownMlPacks, records = records.toList().reversed(),
     )
 }
 
@@ -117,12 +119,17 @@ class FakeStock(private val world: FakeWorld) : StockRepository {
     ): ApiResult<RecordResultDto> {
         val serverKind = if (kind == "intake") "in" else kind
         world.balance += if (kind == "intake") count else -count
+        if (kind == "intake") {
+            val mls = packMls ?: List(count) { null }
+            world.balanceMl += mls.filterNotNull().sum()
+            world.unknownMlPacks += mls.count { it == null }
+        }
         val record = RecordDto(
             id = world.records.size + 1, kind = serverKind, count = count, staffId = fakeNurse.id,
             staffName = fakeNurse.name, createdAt = Instant.now(), canceled = false, ml = packMls?.filterNotNull()?.sum()?.takeIf { it > 0 },
         )
         world.records += record
-        return ApiResult.Ok(RecordResultDto(record, world.balance))
+        return ApiResult.Ok(RecordResultDto(record, world.balance, world.balanceMl, world.unknownMlPacks))
     }
 
     override suspend fun cancel(recordId: Int): ApiResult<RecordResultDto> =

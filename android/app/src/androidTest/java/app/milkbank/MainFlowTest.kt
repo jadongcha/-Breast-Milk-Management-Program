@@ -126,15 +126,15 @@ class MainFlowTest {
 
         // The saved message may be a transient snackbar: poll for it right after confirming.
         waitForText("저장했습니다")
-        // Persistent signals: balance and the new record row
-        waitForText("3팩")
+        // Persistent signals: balance (no per-pack mL entered, so volume unknown) and the new record row
+        waitForText("3팩 · 용량 모름")
         rule.waitUntil(10_000) {
             rule.onAllNodes(hasText("입고 3팩", substring = true)).fetchSemanticsNodes().isNotEmpty()
         }
 
         // Back home: result banner
         scenario!!.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-        waitForText("$FAKE_REG_NO · 3팩 입고 완료 · 현재 냉동 재고 3팩")
+        waitForText("$FAKE_REG_NO · 3팩 입고 완료 · 현재 냉동 재고 3팩 · 용량 모름")
         assertNameNotShown()
     }
 }

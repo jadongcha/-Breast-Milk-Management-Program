@@ -9,6 +9,7 @@ import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -114,5 +115,29 @@ class GuardianFlowTest {
 
         waitForText("제출 접수 완료")
         assertNameNotShown()
+    }
+
+    @Test
+    fun guardian_tenPacks_submitVisible() {
+        waitForText("제출처 태블릿 · $FAKE_STATION_NAME", timeoutMillis = 20_000)
+        rule.onNodeWithText("보호자 전화번호").performTextInput(FAKE_GUARDIAN_PHONE)
+        rule.onNodeWithText("아기 ID").performTextInput(FAKE_REG_NO)
+        rule.onNode(hasText("확인") and hasClickAction()).performClick()
+
+        waitForText("현재 확인된 냉동 모유")
+        rule.onNodeWithText("가져온 모유 입력").performClick()
+
+        waitForText("가져온 모유 팩 수를 눌러 주세요")
+        rule.onNodeWithText("10").performClick()
+        // One field per pack; the last one and the submit button must be reachable by scrolling.
+        waitForText("팩 10 (mL)")
+        rule.onNodeWithText("팩 10 (mL)").performScrollTo()
+        val submit = rule.onNode(hasText("제출") and hasClickAction() and hasAnyAncestor(isDialog()).not())
+        submit.performScrollTo()
+        submit.performClick()
+
+        waitForText("$FAKE_REG_NO 아기 모유 10팩을 제출합니다")
+        rule.onNode(hasText("제출") and inDialog).performClick()
+        waitForText("제출 접수 완료")
     }
 }
