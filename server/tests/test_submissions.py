@@ -278,11 +278,12 @@ def test_confirm_links_intake_record(client, app, nurse_token, world):
 def test_confirm_ml_range(client, nurse_token, world):
     st = world["a"]
     sid = _submit(client, st, _gtoken(client, st), world["p1"], 3).json()["submission"]["id"]
-    for ml in (0, 20001):
+    for ml in (0, 1001):
         r = client.post(
-            f"/submissions/{sid}/confirm", json={"count": 3, "ml": ml}, headers=auth(nurse_token)
+            f"/submissions/{sid}/confirm", json={"count": 3, "pack_mls": [ml, 80, 80]},
+            headers=auth(nurse_token),
         )
-        assert r.status_code == 400 and r.json()["detail"] == "용량은 1~20000mL 사이여야 합니다"
+        assert r.status_code == 400 and r.json()["detail"] == "팩 용량은 1~1000mL 사이여야 합니다"
     assert len(_pending(client, nurse_token)) == 1
 
 

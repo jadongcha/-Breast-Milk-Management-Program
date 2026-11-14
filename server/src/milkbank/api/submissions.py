@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
 
+from .. import packs as pack_service
 from .. import stock as stock_service
 from .. import submissions as submission_service
 from ..models import Staff
@@ -30,11 +31,15 @@ def list_submissions(db: DbDep, staff: StaffDep, status: Literal["pending"] = "p
 def confirm(submission_id: int, body: ConfirmIn, request: Request, db: DbDep, staff: StaffDep):
     sub, record = submission_service.confirm(
         db, request.app.state.clock, submission_id=submission_id, count=body.count,
-        ml=body.ml, ml_given="ml" in body.model_fields_set, staff=staff,
+        pack_mls=body.pack_mls, pack_mls_given="pack_mls" in body.model_fields_set,
+        staff=staff,
     )
+    summary = pack_service.summary(db, sub.patient_id)
     return ConfirmResult(
         record=RecordOut.model_validate(stock_service.record_view(db, record)),
         balance=stock_service.balance(db, sub.patient_id),
+        balance_ml=summary.ml,
+        unknown_ml_packs=summary.unknown,
         submission=SubmissionOut.model_validate(sub),
     )
 

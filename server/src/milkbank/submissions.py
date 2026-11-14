@@ -3,13 +3,14 @@
 모든 트랜잭션은 BEGIN IMMEDIATE로 시작하므로 각 함수의 첫 쿼리가 쓰기 잠금을 잡는다.
 confirm/reject는 첫 쿼리가 제출 조회라서, 같은 제출을 동시에 처리해도 한쪽만 통과한다.
 """
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import stock
+from . import packs, stock
 from .clock import Clock
 from .config import Config
 from .errors import BadRequest, Conflict, Forbidden, NotFound
@@ -29,9 +30,22 @@ from .models import (
 GENERAL_DEVICE_NAME = "병원 기기"
 
 
+def pack_mls_of(sub: Submission) -> list[int | None]:
+    """제출의 팩별 용량. 저장된 값이 없으면(옛 제출) 모두 모름."""
+    if sub.pack_mls is None:
+        return [None] * sub.count
+    return json.loads(sub.pack_mls)
+
+
+def _sum_known(mls: list[int | None]) -> int | None:
+    known = [m for m in mls if m is not None]
+    return sum(known) if known else None
+
+
 def submit(
     db: Session, clock: Clock, config: Config, *,
-    session: GuardianSession, patient_id: int, count: int, ml: int | None = None,
+    session: GuardianSession, patient_id: int, count: int,
+    pack_mls: list[int | None] | None = None,
 ) -> Submission:
     patient = db.get(Patient, patient_id)  # 첫 쿼리: 쓰기 잠금
     if patient is None or patient.guardian_phone != session.phone:
@@ -40,7 +54,9 @@ def submit(
         raise Conflict("퇴원한 아기입니다")
     if not 1 <= count <= 10:
         raise BadRequest("팩 수는 1~10 사이여야 합니다")
-    stock.validate_ml(ml)
+    if pack_mls is None:
+        pack_mls = [None] * count
+    packs.validate_pack_mls(pack_mls, count)
     waiting = db.scalar(
         select(func.count()).select_from(Submission).where(
             Submission.patient_id == patient_id, Submission.status == SubmissionStatus.PENDING
@@ -49,7 +65,8 @@ def submit(
     if waiting >= config.pending_limit:
         raise Conflict("확인을 기다리는 제출이 많습니다. 간호사에게 말씀해 주세요")
     sub = Submission(
-        patient_id=patient_id, station_id=session.station_id, count=count, ml=ml,
+        patient_id=patient_id, station_id=session.station_id, count=count,
+        pack_mls=json.dumps(pack_mls), ml=_sum_known(pack_mls),
         submitted_at=clock.now(), status=SubmissionStatus.PENDING,
     )
     db.add(sub)
@@ -67,6 +84,7 @@ class PendingView:
     submitted_at: datetime
     count: int
     ml: int | None
+    pack_mls: list[int | None]
     discharged: bool
 
 
@@ -82,7 +100,7 @@ def pending(db: Session) -> list[PendingView]:
         PendingView(
             id=s.id, patient_id=p.id, baby_id=p.reg_no, balance=stock.balance(db, p.id),
             station_name=station_name or GENERAL_DEVICE_NAME, submitted_at=s.submitted_at, count=s.count,
-            ml=s.ml, discharged=p.status == PatientStatus.DISCHARGED,
+            ml=s.ml, pack_mls=pack_mls_of(s), discharged=p.status == PatientStatus.DISCHARGED,
         )
         for s, p, station_name in rows
     ]
@@ -99,7 +117,7 @@ def _load_pending(db: Session, submission_id: int) -> Submission:
 
 def confirm(
     db: Session, clock: Clock, *, submission_id: int, count: int,
-    ml: int | None = None, ml_given: bool = False, staff: Staff,
+    pack_mls: list[int | None] | None = None, pack_mls_given: bool = False, staff: Staff,
 ) -> tuple[Submission, StockRecord]:
     sub = _load_pending(db, submission_id)
     patient = db.get(Patient, sub.patient_id)
@@ -107,16 +125,20 @@ def confirm(
         raise Conflict("퇴원한 아기입니다. 반려만 할 수 있습니다")
     if not 1 <= count <= 100:
         raise BadRequest("팩 수는 1~100 사이여야 합니다")
-    ml = stock.validate_ml(ml if ml_given else sub.ml)
+    if not pack_mls_given:
+        guardian = pack_mls_of(sub)[:count]
+        pack_mls = guardian + [None] * (count - len(guardian))
+    elif pack_mls is None:
+        pack_mls = [None] * count
     station = db.get(Station, sub.station_id) if sub.station_id is not None else None
     source = station.name if station is not None else GENERAL_DEVICE_NAME
     record = stock.add_record(
         db, clock, patient_id=sub.patient_id, kind=RecordKind.INTAKE, count=count,
-        pack_mls=[None] * count, staff=staff, memo=f"{source} 제출분(제출 {sub.count}팩)",
+        pack_mls=pack_mls, staff=staff, memo=f"{source} 제출분(제출 {sub.count}팩)",
     )
     sub.status = SubmissionStatus.CONFIRMED
     sub.confirmed_count = count
-    sub.confirmed_ml = ml
+    sub.confirmed_ml = record.ml
     sub.handled_by = staff.id
     sub.handled_at = clock.now()
     sub.intake_record_id = record.id

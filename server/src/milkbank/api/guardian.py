@@ -46,7 +46,7 @@ def logout(db: DbDep, session: GuardianDep):
 def submit(body: SubmitIn, request: Request, db: DbDep, session: GuardianDep):
     sub = submission_service.submit(
         db, request.app.state.clock, request.app.state.config,
-        session=session, patient_id=body.patient_id, count=body.count, ml=body.ml,
+        session=session, patient_id=body.patient_id, count=body.count, pack_mls=body.pack_mls,
     )
     baby = next(b for b in guardian_service.guardian_babies(db, session.phone)
                 if b.patient_id == sub.patient_id)
@@ -54,4 +54,6 @@ def submit(body: SubmitIn, request: Request, db: DbDep, session: GuardianDep):
         submission=SubmittedOut.model_validate(sub),
         balance=baby.balance,
         pending_count=baby.pending_count,
+        balance_ml=baby.balance_ml,
+        unknown_ml_packs=baby.unknown_ml_packs,
     )

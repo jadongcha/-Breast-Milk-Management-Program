@@ -1,6 +1,6 @@
 from conftest import _gauth, _login, auth
 
-MSG = "용량은 1~20000mL 사이여야 합니다"
+MSG = "팩 용량은 1~1000mL 사이여야 합니다"
 
 
 def _record(client, token, pid, **body):
@@ -51,12 +51,12 @@ def test_cancel_copies_ml(client, nurse_token, world):
 def test_guardian_submit_ml(client, nurse_token, world):
     st = world["a"]
     token = _gtoken(client, st)
-    r = _submit(client, st, token, world["p1"], ml=240)
+    r = _submit(client, st, token, world["p1"], pack_mls=[80, 80, 80])
     assert r.status_code == 201, r.text
     assert r.json()["submission"]["ml"] == 240
     rows = client.get("/submissions?status=pending", headers=auth(nurse_token)).json()
     assert rows[0]["ml"] == 240
-    r = _submit(client, st, token, world["p1"], ml=0)
+    r = _submit(client, st, token, world["p1"], pack_mls=[0, 80, 80])
     assert r.status_code == 400 and r.json()["detail"] == MSG
     r = _submit(client, st, token, world["p1"])
     assert r.json()["submission"]["ml"] is None
@@ -65,19 +65,20 @@ def test_guardian_submit_ml(client, nurse_token, world):
 def test_confirm_ml_default_and_clear(client, nurse_token, world):
     st = world["a"]
     token = _gtoken(client, st)
-    ids = [_submit(client, st, token, world["p1"], ml=240).json()["submission"]["id"] for _ in range(3)]
+    ids = [
+        _submit(client, st, token, world["p1"], pack_mls=[80, 80, 80]).json()["submission"]["id"]
+        for _ in range(3)
+    ]
 
     def confirm(i, body):
         r = client.post(f"/submissions/{ids[i]}/confirm", json=body, headers=auth(nurse_token))
         assert r.status_code == 200, r.text
         return r.json()
 
-    # 입고 기록의 용량은 이제 팩 용량(pack_mls)에서 나온다. 확인 입력의 pack_mls는 3번 작업에서 연결하며,
-    # 그때까지 확인으로 생긴 팩은 용량을 모른다(기록 ml은 null).
     a = confirm(0, {"count": 3})
-    assert a["submission"]["confirmed_ml"] == 240 and a["record"]["ml"] is None
-    b = confirm(1, {"count": 3, "ml": 200})
-    assert b["submission"]["confirmed_ml"] == 200 and b["record"]["ml"] is None
-    c = confirm(2, {"count": 3, "ml": None})
+    assert a["submission"]["confirmed_ml"] == 240 and a["record"]["ml"] == 240
+    b = confirm(1, {"count": 3, "pack_mls": [70, 70, 60]})
+    assert b["submission"]["confirmed_ml"] == 200 and b["record"]["ml"] == 200
+    c = confirm(2, {"count": 3, "pack_mls": None})
     assert c["submission"]["confirmed_ml"] is None and c["record"]["ml"] is None
     assert c["submission"]["ml"] == 240

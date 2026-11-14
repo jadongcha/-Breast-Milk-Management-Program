@@ -22,6 +22,7 @@ from .models import (
 )
 from .patients import normalize_phone
 from .security import hash_token, new_token
+from .packs import summary
 from .stock import balance
 
 _BAD_LOGIN = "전화번호 또는 아기 ID가 올바르지 않습니다"
@@ -35,6 +36,8 @@ class BabyView:
     baby_id: str
     balance: int
     pending_count: int
+    balance_ml: int
+    unknown_ml_packs: int
 
 
 def _same_station(station_id: int | None):
@@ -57,7 +60,8 @@ def guardian_babies(db: Session, phone: str) -> list[BabyView]:
                 Submission.patient_id == p.id, Submission.status == SubmissionStatus.PENDING
             )
         )
-        views.append(BabyView(p.id, p.reg_no, balance(db, p.id), pending))
+        s = summary(db, p.id)
+        views.append(BabyView(p.id, p.reg_no, balance(db, p.id), pending, s.ml, s.unknown))
     return views
 
 

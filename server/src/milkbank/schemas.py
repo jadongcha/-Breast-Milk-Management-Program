@@ -1,8 +1,9 @@
 """pydantic 입력/출력 모델."""
+import json
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationInfo, field_validator
 
 from .models import (
     DiscardReason,
@@ -218,6 +219,8 @@ class BabyOut(BaseModel):
     baby_id: str
     balance: int
     pending_count: int
+    balance_ml: int
+    unknown_ml_packs: int
 
 
 class GuardianLoginOut(BaseModel):
@@ -228,7 +231,7 @@ class GuardianLoginOut(BaseModel):
 class SubmitIn(BaseModel):
     patient_id: int
     count: int
-    ml: int | None = None
+    pack_mls: list[int | None] | None = None
 
 
 class SubmittedOut(BaseModel):
@@ -244,6 +247,8 @@ class SubmitResult(BaseModel):
     submission: SubmittedOut
     balance: int
     pending_count: int
+    balance_ml: int
+    unknown_ml_packs: int
 
 
 class SubmissionOut(BaseModel):
@@ -252,6 +257,7 @@ class SubmissionOut(BaseModel):
     id: int
     patient_id: int
     count: int
+    pack_mls: list[int | None]
     submitted_at: datetime
     status: SubmissionStatus
     confirmed_count: int | None
@@ -261,6 +267,14 @@ class SubmissionOut(BaseModel):
     handled_at: datetime | None
     reject_reason: RejectReason | None
     memo: str | None
+
+    @field_validator("pack_mls", mode="before")
+    @classmethod
+    def _parse_pack_mls(cls, value, info: ValidationInfo):
+        # DB에는 JSON 문자열로 저장되고, 옛 제출은 값이 없다(모두 모름).
+        if value is None:
+            return [None] * info.data["count"]
+        return json.loads(value) if isinstance(value, str) else value
 
 
 class PendingOut(BaseModel):
@@ -274,17 +288,20 @@ class PendingOut(BaseModel):
     submitted_at: datetime
     count: int
     ml: int | None
+    pack_mls: list[int | None]
     discharged: bool
 
 
 class ConfirmIn(BaseModel):
     count: int
-    ml: int | None = None
+    pack_mls: list[int | None] | None = None
 
 
 class ConfirmResult(BaseModel):
     record: RecordOut
     balance: int
+    balance_ml: int
+    unknown_ml_packs: int
     submission: SubmissionOut
 
 
