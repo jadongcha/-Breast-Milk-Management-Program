@@ -31,7 +31,9 @@ def judge(
             days_left = balance / daily_avg
             if balance == 0:
                 return Judgement(daily_avg, days_left, "empty")
-            status: Status = "low" if days_left <= days_threshold else "enough"
+            # 실수 오차를 피하려고 정수로 비교한다: balance/(recent/avg_days) <= days_threshold
+            is_low = balance * avg_days <= days_threshold * recent_use_packs
+            status: Status = "low" if is_low else "enough"
             return Judgement(daily_avg, days_left, status)
     if balance == 0:
         return Judgement(daily_avg, None, "empty")

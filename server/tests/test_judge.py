@@ -42,3 +42,12 @@ def test_empty():
     assert _j(balance=0).status == "empty"
     j = _j(balance=0, first_use_day=TODAY - timedelta(days=5), recent_use_packs=6)
     assert j.status == "empty"
+
+
+def test_exact_threshold_is_low_despite_float_rounding():
+    # 17 / (17 / 7) == 7.000000000000001 이지만 정확히 7일치이므로 부족이다.
+    j = _j(
+        first_use_day=TODAY - timedelta(days=9), recent_use_packs=17, balance=17,
+        avg_days=7, days_threshold=7,
+    )
+    assert j.status == "low"

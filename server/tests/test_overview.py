@@ -45,6 +45,60 @@ def test_judge_inputs_skip_canceled(client, app, clock, admin_token):
     assert recent == 1
 
 
+def _inputs_with_uses(client, app, clock, admin_token, uses):
+    """uses: [(UTC 시각, 팩 수, 취소 여부)]로 USE 기록을 넣고 judge_inputs(avg_days=3)를 돌려준다."""
+    pid = _patient(client, admin_token, "E-1")
+    with app.state.session_factory() as db:
+        staff_id = db.query(Staff).first().id
+        for at, count, canceled in uses:
+            rec = StockRecord(
+                patient_id=pid, kind=RecordKind.USE, count=count, staff_id=staff_id,
+                created_at=at,
+            )
+            db.add(rec)
+            db.flush()
+            if canceled:
+                db.add(
+                    StockRecord(
+                        patient_id=pid, kind=RecordKind.CANCEL, count=count,
+                        staff_id=staff_id, created_at=at, target_id=rec.id,
+                    )
+                )
+        db.commit()
+        return reports.judge_inputs(db, pid, reports.kst_today(clock), 3)
+
+
+def test_judge_inputs_window_edges_kst(client, app, clock, admin_token):
+    from datetime import UTC, date, datetime
+
+    def u(d, h, m):
+        return datetime(2026, 11, d, h, m, tzinfo=UTC)
+
+    # 오늘(KST)은 11-10. 창은 KST [11-07 00:00, 11-10 00:00) = UTC [11-06 15:00, 11-09 15:00)
+    first, recent = _inputs_with_uses(
+        client, app, clock, admin_token,
+        [
+            (u(6, 14, 59), 8, False),   # 창 시작 1분 전 -> 제외
+            (u(6, 15, 0), 2, False),    # 창 시작 -> 포함
+            (u(9, 14, 59), 4, False),   # 창 끝 1분 전 -> 포함
+            (u(9, 15, 0), 16, False),   # KST 오늘 00:00 -> 제외
+            (u(8, 0, 0), 32, True),     # 창 안이지만 취소됨 -> 제외
+        ],
+    )
+    assert recent == 6
+    assert first == date(2026, 11, 6)  # 첫 사용은 KST 11-06 23:59 (UTC 날짜도 같음)
+
+
+def test_judge_inputs_first_day_uses_kst_date(client, app, clock, admin_token):
+    from datetime import UTC, date, datetime
+
+    # UTC 11-08 15:30 = KST 11-09 00:30
+    first, _ = _inputs_with_uses(
+        client, app, clock, admin_token, [(datetime(2026, 11, 8, 15, 30, tzinfo=UTC), 1, False)]
+    )
+    assert first == date(2026, 11, 9)
+
+
 def test_overview_rows_and_summary(client, app, clock, admin_token):
     low = _patient(client, admin_token, "O-2")
     ok = _patient(client, admin_token, "O-1")
