@@ -22,6 +22,8 @@ import app.milkbank.R
 import app.milkbank.core.SystemClock
 import app.milkbank.ui.admin.PatientFormScreen
 import app.milkbank.ui.admin.PatientFormViewModel
+import app.milkbank.ui.admin.SettingsScreen
+import app.milkbank.ui.admin.SettingsViewModel
 import app.milkbank.ui.admin.StaffScreen
 import app.milkbank.ui.admin.StaffViewModel
 import app.milkbank.ui.login.LoginScreen
@@ -146,6 +148,21 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 },
             )
             StationsScreen(vm, onBack = { navController.popBackStack() })
+        }
+        composable<AdminSettings> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            val unexpected = stringResource(R.string.network_error)
+            val vm: SettingsViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        SettingsViewModel(
+                            { container.admin }, { container.session.setIdleMinutes(it) }, unexpected,
+                            logUnexpected("settings failed"),
+                        )
+                    }
+                },
+            )
+            SettingsScreen(vm, onBack = { navController.popBackStack() })
         }
         composable<GuardianHome> {
             val container = (LocalContext.current.applicationContext as MilkbankApp).container

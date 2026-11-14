@@ -1,14 +1,20 @@
 package app.milkbank.data
 
+import app.milkbank.api.DailyDto
+import app.milkbank.api.DischargeRequest
 import app.milkbank.api.LoginRequest
 import app.milkbank.api.LoginResponse
 import app.milkbank.api.MilkbankApi
+import app.milkbank.api.OverviewDto
 import app.milkbank.api.PasswordChangeRequest
 import app.milkbank.api.PatientDetailDto
 import app.milkbank.api.PatientDto
 import app.milkbank.api.PatientForm
 import app.milkbank.api.RecordRequest
 import app.milkbank.api.RecordResultDto
+import app.milkbank.api.SeriesPointDto
+import app.milkbank.api.SettingsDto
+import app.milkbank.api.SettingsPatch
 import app.milkbank.api.StaffCreateRequest
 import app.milkbank.api.StaffCreateResponse
 import app.milkbank.api.StaffDto
@@ -88,7 +94,7 @@ class HttpAuthRepository(
 ) : AuthRepository {
     override suspend fun login(username: String, password: String): ApiResult<LoginResponse> {
         val r = api.call(networkError) { it.login(LoginRequest(username, password)) }
-        if (r is ApiResult.Ok) session.start(r.value.token, r.value.staff)
+        if (r is ApiResult.Ok) session.start(r.value.token, r.value.staff, r.value.staffIdleMinutes)
         return r
     }
 
@@ -165,4 +171,30 @@ class HttpStaffRepository(private val api: MilkbankApi?, private val networkErro
         api.call(networkError) { it.setActive(id, StaffPatchRequest(active)) }
 
     override suspend fun resetPassword(id: Int) = api.call(networkError) { it.resetPassword(id) }
+}
+
+interface AdminRepository {
+    suspend fun overview(): ApiResult<OverviewDto>
+    suspend fun daily(date: String?): ApiResult<DailyDto>
+    suspend fun series(days: Int, patientId: Int?): ApiResult<List<SeriesPointDto>>
+    suspend fun exportCsv(from: String, to: String): ApiResult<ByteArray>
+    suspend fun settings(): ApiResult<SettingsDto>
+    suspend fun saveSettings(patch: SettingsPatch): ApiResult<SettingsDto>
+    suspend fun discharge(id: Int, remaining: String, discardReason: String?): ApiResult<PatientDto>
+    suspend fun erase(id: Int): ApiResult<PatientDto>
+}
+
+class HttpAdminRepository(private val api: MilkbankApi?, private val networkError: String) : AdminRepository {
+    override suspend fun overview() = api.call(networkError) { it.overview() }
+    override suspend fun daily(date: String?) = api.call(networkError) { it.daily(date) }
+    override suspend fun series(days: Int, patientId: Int?) = api.call(networkError) { it.series(days, patientId) }
+    override suspend fun exportCsv(from: String, to: String) =
+        api.call(networkError) { it.exportCsv(from, to).use { body -> body.bytes() } }
+
+    override suspend fun settings() = api.call(networkError) { it.settings() }
+    override suspend fun saveSettings(patch: SettingsPatch) = api.call(networkError) { it.saveSettings(patch) }
+    override suspend fun discharge(id: Int, remaining: String, discardReason: String?) =
+        api.call(networkError) { it.discharge(id, DischargeRequest(remaining, discardReason)) }
+
+    override suspend fun erase(id: Int) = api.call(networkError) { it.erase(id) }
 }

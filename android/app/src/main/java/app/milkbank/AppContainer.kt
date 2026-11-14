@@ -8,7 +8,9 @@ import app.milkbank.api.AuthInterceptor
 import app.milkbank.api.MilkbankApi
 import app.milkbank.core.ElapsedClock
 import app.milkbank.core.SystemClock
+import app.milkbank.data.AdminRepository
 import app.milkbank.data.AuthRepository
+import app.milkbank.data.HttpAdminRepository
 import app.milkbank.data.HttpAuthRepository
 import app.milkbank.data.HttpPatientRepository
 import app.milkbank.data.HttpStaffRepository
@@ -58,6 +60,7 @@ class Repositories(
     val stations: StationRepository,
     val guardian: GuardianRepository,
     val submissions: SubmissionRepository,
+    val admin: AdminRepository,
 )
 
 /** Manual DI. Repositories are rebuilt whenever the registered server changes. */
@@ -130,6 +133,7 @@ class AppContainer(context: Context) {
     val stations: StationRepository get() = _repositories.value.stations
     val guardian: GuardianRepository get() = _repositories.value.guardian
     val submissions: SubmissionRepository get() = _repositories.value.submissions
+    val admin: AdminRepository get() = _repositories.value.admin
 
     /** Replaces the repositories with fakes and stops following config changes. */
     @VisibleForTesting
@@ -154,5 +158,6 @@ class AppContainer(context: Context) {
         stations = HttpStationRepository(api, networkError),
         guardian = HttpGuardianRepository(api, networkError, appScope = scope),
         submissions = HttpSubmissionRepository(api, networkError),
+        admin = HttpAdminRepository(api, networkError),
     )
 }

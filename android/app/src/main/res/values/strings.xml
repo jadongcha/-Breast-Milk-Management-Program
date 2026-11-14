@@ -115,6 +115,16 @@
     <string name="field_admitted_on">입원일</string>
     <string name="save">저장</string>
     <string name="staff_title">직원 관리</string>
+    <string name="menu_settings">설정</string>
+    <string name="settings_title">설정</string>
+    <string name="setting_days_threshold">남은 일수 기준</string>
+    <string name="setting_packs_threshold">신규 환자 팩 수 기준</string>
+    <string name="setting_avg_days">평균 계산 기간(일)</string>
+    <string name="setting_staff_idle_minutes">직원 자동 로그아웃(분)</string>
+    <string name="setting_retention_days">퇴원 후 개인정보 보관(일)</string>
+    <string name="settings_saved">설정을 저장했습니다</string>
+    <string name="settings_number_error">숫자만 입력해 주세요</string>
+    <string name="settings_retention_warning">보관 기간을 줄이면 지난 퇴원 환자의 개인정보가 다음 확인 때(1시간 안) 바로 말소됩니다. 계속할까요?</string>
     <string name="staff_add">직원 추가</string>
     <string name="staff_name_label">이름</string>
     <string name="role_label">역할</string>

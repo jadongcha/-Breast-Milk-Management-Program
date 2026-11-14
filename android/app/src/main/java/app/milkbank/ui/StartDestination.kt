@@ -15,6 +15,7 @@ sealed interface Route
 @Serializable data class PatientForm(val id: Int? = null) : Route
 @Serializable data object Staff : Route
 @Serializable data object Stations : Route
+@Serializable data object AdminSettings : Route
 @Serializable data object GuardianHome : Route
 
 /** Guardian flow on a general hospital device: public (no staff session), no station token. */

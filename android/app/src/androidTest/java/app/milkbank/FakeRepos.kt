@@ -10,6 +10,12 @@ import app.milkbank.api.StationCreateResponse
 import app.milkbank.api.StationDto
 import app.milkbank.api.StationSelfDto
 import app.milkbank.api.SubmissionBriefDto
+import app.milkbank.api.DailyDto
+import app.milkbank.api.OverviewDto
+import app.milkbank.api.SeriesPointDto
+import app.milkbank.api.SettingsDto
+import app.milkbank.api.SettingsPatch
+import app.milkbank.data.AdminRepository
 import app.milkbank.data.GuardianRepository
 import app.milkbank.data.StationRepository
 import app.milkbank.data.SubmissionRepository
@@ -124,6 +130,18 @@ class FakeStaff : StaffRepository {
 
 private val unsupported = ApiError(null, "unsupported in fake")
 
+class FakeAdmin : AdminRepository {
+    override suspend fun overview(): ApiResult<OverviewDto> = ApiResult.Err(unsupported)
+    override suspend fun daily(date: String?): ApiResult<DailyDto> = ApiResult.Err(unsupported)
+    override suspend fun series(days: Int, patientId: Int?): ApiResult<List<SeriesPointDto>> = ApiResult.Err(unsupported)
+    override suspend fun exportCsv(from: String, to: String): ApiResult<ByteArray> = ApiResult.Err(unsupported)
+    override suspend fun settings(): ApiResult<SettingsDto> = ApiResult.Ok(SettingsDto(3, 6, 7, 10, 30))
+    override suspend fun saveSettings(patch: SettingsPatch): ApiResult<SettingsDto> = ApiResult.Ok(SettingsDto(3, 6, 7, 10, 30))
+    override suspend fun discharge(id: Int, remaining: String, discardReason: String?): ApiResult<PatientDto> =
+        ApiResult.Err(unsupported)
+    override suspend fun erase(id: Int): ApiResult<PatientDto> = ApiResult.Err(unsupported)
+}
+
 class FakeStations : StationRepository {
     override suspend fun create(name: String): ApiResult<StationCreateResponse> = ApiResult.Err(unsupported)
     override suspend fun list(): ApiResult<List<StationDto>> = ApiResult.Ok(emptyList())
@@ -185,4 +203,5 @@ fun fakeRepositories(session: SessionManager, world: FakeWorld, guardian: FakeGu
     stations = FakeStations(),
     guardian = guardian,
     submissions = FakeSubmissions(),
+    admin = FakeAdmin(),
 )

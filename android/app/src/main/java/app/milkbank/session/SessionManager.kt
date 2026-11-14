@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.update
 
 enum class LogoutReason { USER, EXPIRED, IDLE }
 
-data class Session(val token: String, val staff: StaffDto)
+data class Session(val token: String, val staff: StaffDto, val idleMinutes: Int = 10)
 
 /** In-memory only: the token is never written to disk. */
 class SessionManager(@Suppress("unused") private val clock: Clock) {
@@ -28,15 +28,20 @@ class SessionManager(@Suppress("unused") private val clock: Clock) {
     private val _passwordRequired = MutableStateFlow(false)
     val passwordRequired: StateFlow<Boolean> = _passwordRequired.asStateFlow()
 
-    fun start(token: String, staff: StaffDto) {
+    fun start(token: String, staff: StaffDto, idleMinutes: Int = 10) {
         passwordChangeForced = false
-        _state.value = Session(token, staff)
+        _state.value = Session(token, staff, idleMinutes)
     }
 
     /** Replaces the logged-in staff (e.g. after a password change), keeping the token; no-op when logged out. */
     fun updateStaff(staff: StaffDto) {
         if (!staff.mustChangePassword) passwordChangeForced = false
         _state.update { cur -> cur?.copy(staff = staff) }
+    }
+
+    /** Changes the idle timeout of the running session (an admin saved a new value); no-op when logged out. */
+    fun setIdleMinutes(minutes: Int) {
+        _state.update { cur -> cur?.copy(idleMinutes = minutes) }
     }
 
     /** Ends the session and records [reason]; a no-op when nobody is logged in. */

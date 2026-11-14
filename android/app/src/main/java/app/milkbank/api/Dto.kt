@@ -52,6 +52,7 @@ data class LoginResponse(
     val token: String,
     @SerialName("must_change_password") val mustChangePassword: Boolean,
     val staff: StaffDto,
+    @SerialName("staff_idle_minutes") val staffIdleMinutes: Int = 10,
 )
 
 @Serializable
@@ -104,6 +105,8 @@ data class PatientDto(
     val status: String,
     @SerialName("admitted_on") val admittedOn: String,
     @SerialName("discharged_on") val dischargedOn: String? = null,
+    /** Set once the personal data was erased; null otherwise. */
+    @SerialName("erased_at") val erasedAt: String? = null,
     @SerialName("alert_enabled") val alertEnabled: Boolean,
     @SerialName("days_threshold") val daysThreshold: Int? = null,
     @SerialName("packs_threshold") val packsThreshold: Int? = null,
@@ -265,3 +268,93 @@ data class RejectRequest(val reason: String, val memo: String? = null)
 
 @Serializable
 data class RejectResponse(val submission: SubmissionDto)
+
+/** status is "enough", "low" or "empty". Averages are null while there is not enough history. */
+@Serializable
+data class OverviewRowDto(
+    @SerialName("patient_id") val patientId: Int,
+    @SerialName("baby_id") val babyId: String,
+    val bed: String,
+    val balance: Int,
+    @SerialName("daily_avg") val dailyAvg: Double? = null,
+    @SerialName("days_left") val daysLeft: Double? = null,
+    val status: String,
+    @SerialName("pending_packs") val pendingPacks: Int,
+)
+
+@Serializable
+data class OverviewDto(
+    val admitted: Int,
+    val low: Int,
+    @SerialName("today_in_packs") val todayInPacks: Int,
+    @SerialName("today_in_ml") val todayInMl: Int? = null,
+    @SerialName("today_use_packs") val todayUsePacks: Int,
+    @SerialName("today_use_ml") val todayUseMl: Int? = null,
+    @SerialName("pending_submissions") val pendingSubmissions: Int,
+    val rows: List<OverviewRowDto>,
+)
+
+@Serializable
+data class DailyRowDto(
+    @SerialName("patient_id") val patientId: Int,
+    @SerialName("baby_id") val babyId: String,
+    val bed: String,
+    @SerialName("in_packs") val inPacks: Int,
+    @SerialName("in_ml") val inMl: Int? = null,
+    @SerialName("use_packs") val usePacks: Int,
+    @SerialName("use_ml") val useMl: Int? = null,
+    @SerialName("discard_packs") val discardPacks: Int,
+    @SerialName("discard_ml") val discardMl: Int? = null,
+    @SerialName("return_packs") val returnPacks: Int,
+)
+
+@Serializable
+data class DailyTotalDto(
+    @SerialName("in_packs") val inPacks: Int,
+    @SerialName("in_ml") val inMl: Int? = null,
+    @SerialName("use_packs") val usePacks: Int,
+    @SerialName("use_ml") val useMl: Int? = null,
+    @SerialName("discard_packs") val discardPacks: Int,
+    @SerialName("discard_ml") val discardMl: Int? = null,
+    @SerialName("return_packs") val returnPacks: Int,
+)
+
+/** [date] is "YYYY-MM-DD". */
+@Serializable
+data class DailyDto(val date: String, val rows: List<DailyRowDto>, val total: DailyTotalDto)
+
+/** [day] is "YYYY-MM-DD". */
+@Serializable
+data class SeriesPointDto(
+    val day: String,
+    @SerialName("in_packs") val inPacks: Int,
+    @SerialName("use_packs") val usePacks: Int,
+    @SerialName("use_ml") val useMl: Int? = null,
+    @SerialName("discard_packs") val discardPacks: Int,
+)
+
+@Serializable
+data class SettingsDto(
+    @SerialName("days_threshold") val daysThreshold: Int,
+    @SerialName("packs_threshold") val packsThreshold: Int,
+    @SerialName("avg_days") val avgDays: Int,
+    @SerialName("staff_idle_minutes") val staffIdleMinutes: Int,
+    @SerialName("retention_days") val retentionDays: Int,
+)
+
+/** Only the set fields are sent (null means unchanged); the server accepts JSON integers only. */
+@Serializable
+data class SettingsPatch(
+    @SerialName("days_threshold") val daysThreshold: Int? = null,
+    @SerialName("packs_threshold") val packsThreshold: Int? = null,
+    @SerialName("avg_days") val avgDays: Int? = null,
+    @SerialName("staff_idle_minutes") val staffIdleMinutes: Int? = null,
+    @SerialName("retention_days") val retentionDays: Int? = null,
+)
+
+/** [remaining] is "return" or "discard". */
+@Serializable
+data class DischargeRequest(
+    val remaining: String,
+    @SerialName("discard_reason") val discardReason: String? = null,
+)

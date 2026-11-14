@@ -58,6 +58,24 @@ class RepositoriesTest {
     private fun auth() = HttpAuthRepository(api, session, net)
 
     @Test
+    fun login_passesServerIdleMinutesToTheSession() = runBlocking {
+        server.enqueue(
+            MockResponse().addHeader("Content-Type", "application/json").setBody(
+                loginJson.replace("\"extra\"", "\"staff_idle_minutes\":4,\"extra\""),
+            ),
+        )
+        auth().login("kim", "pw")
+        assertEquals(4, session.state.value?.idleMinutes)
+    }
+
+    @Test
+    fun login_withoutIdleMinutesKeepsTheDefault10() = runBlocking {
+        server.enqueue(MockResponse().setBody(loginJson).addHeader("Content-Type", "application/json"))
+        auth().login("kim", "pw")
+        assertEquals(10, session.state.value?.idleMinutes)
+    }
+
+    @Test
     fun loginParsesAndStartsSession() = runBlocking {
         server.enqueue(MockResponse().setBody(loginJson).addHeader("Content-Type", "application/json"))
         val r = auth().login("kim", "pw") as ApiResult.Ok

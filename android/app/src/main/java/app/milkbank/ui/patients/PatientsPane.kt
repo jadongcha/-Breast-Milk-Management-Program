@@ -53,6 +53,7 @@ import app.milkbank.ui.PatientDetail
 import app.milkbank.ui.PatientForm
 import app.milkbank.ui.GuardianHome
 import app.milkbank.ui.Staff
+import app.milkbank.ui.AdminSettings
 import app.milkbank.ui.Stations
 import app.milkbank.ui.navigateClearingStack
 import app.milkbank.ui.station.StationSetupDialog
@@ -179,6 +180,11 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                                     modifier = Modifier.heightIn(min = 56.dp),
                                     text = { Text(stringResource(R.string.menu_admin_staff)) },
                                     onClick = { menuOpen = false; navController.navigate(Staff) },
+                                )
+                                DropdownMenuItem(
+                                    modifier = Modifier.heightIn(min = 56.dp),
+                                    text = { Text(stringResource(R.string.menu_settings)) },
+                                    onClick = { menuOpen = false; navController.navigate(AdminSettings) },
                                 )
                                 DropdownMenuItem(
                                     modifier = Modifier.heightIn(min = 56.dp),

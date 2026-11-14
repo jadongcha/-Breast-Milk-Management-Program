@@ -55,6 +55,27 @@ class IdleWatcherTest {
     }
 
     @Test
+    fun usesTheSessionIdleMinutes() {
+        session.start("tok", staff, idleMinutes = 2)
+        clock.advance(Duration.ofMinutes(1).plusSeconds(59))
+        watcher.check()
+        assertNotNull(session.state.value)
+        clock.advance(Duration.ofSeconds(1))
+        watcher.check()
+        assertNull(session.state.value)
+        assertEquals(LogoutReason.IDLE, session.logoutReason.value)
+    }
+
+    @Test
+    fun changedIdleMinutesApplyToTheRunningSession() {
+        login()
+        session.setIdleMinutes(1)
+        clock.advance(Duration.ofMinutes(1))
+        watcher.check()
+        assertEquals(LogoutReason.IDLE, session.logoutReason.value)
+    }
+
+    @Test
     fun resumeAfterIdle_logsOut() {
         login()
         clock.advance(Duration.ofMinutes(11))
