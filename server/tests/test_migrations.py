@@ -677,7 +677,11 @@ def test_upgrade_0004_aborts_on_mismatch(tmp_path, clock):
         with pytest.raises(RuntimeError, match="팩 옮기기 결과가 잔량과 다릅니다: 환자 1"):
             migrate(eng, path, clock.now())
         assert _version(eng) == "0004"
-        assert "pack" not in inspect(eng).get_table_names()
+        insp = inspect(eng)
+        assert "pack" not in insp.get_table_names()
+        cols = lambda t: {c["name"] for c in insp.get_columns(t)}
+        assert "ml_unknown" not in cols("stock_record")
+        assert "pack_mls" not in cols("submission")
     finally:
         eng.dispose()
 
@@ -702,5 +706,54 @@ def test_downgrade_0005_to_0004(tmp_path, clock):
         with eng.connect() as conn:
             assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
             assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
+    finally:
+        eng.dispose()
+
+
+def test_upgrade_0004_cancelled_earlier_intake_owed(tmp_path, clock):
+    path = tmp_path / "p5o.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            _at_0004(eng, conn)
+            a = _rec(conn, 1, "in", 2, 1)
+            use = _rec(conn, 1, "use", 2, 2)
+            b = _rec(conn, 1, "in", 2, 3)
+            _rec(conn, 1, "cancel", 2, 4, target=a)
+            conn.commit()
+        migrate(eng, path, clock.now())
+        assert _version(eng) == "0005"
+        with eng.connect() as conn:
+            assert conn.execute(
+                text("SELECT count(*) FROM pack WHERE out_record_id IS NULL")
+            ).scalar() == 0
+            used = conn.execute(
+                text("SELECT in_record_id FROM pack WHERE out_record_id = :u"),
+                {"u": use},
+            ).fetchall()
+            assert [r[0] for r in used] == [b, b]
+    finally:
+        eng.dispose()
+
+
+def test_upgrade_0004_replays_in_id_order(tmp_path, clock):
+    path = tmp_path / "p5i.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            _at_0004(eng, conn)
+            first = _rec(conn, 1, "in", 1, 9, ml=50)   # id 1, created later
+            second = _rec(conn, 1, "in", 1, 1, ml=70)  # id 2, created earlier
+            use = _rec(conn, 1, "use", 1, 10)
+            conn.commit()
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            assert conn.execute(
+                text("SELECT in_record_id FROM pack WHERE out_record_id = :u"),
+                {"u": use},
+            ).scalar() == first
+            assert conn.execute(
+                text("SELECT in_record_id FROM pack WHERE out_record_id IS NULL")
+            ).scalar() == second
     finally:
         eng.dispose()

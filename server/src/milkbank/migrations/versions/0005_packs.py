@@ -51,10 +51,13 @@ def _move_stock_into_packs(bind) -> None:
             " WHERE patient_id = ? AND kind != 'cancel'"
             " AND id NOT IN (SELECT target_id FROM stock_record"
             "                WHERE kind = 'cancel' AND target_id IS NOT NULL)"
-            " ORDER BY created_at, id",
+            " ORDER BY id",
             (pid,),
         ).fetchall()
         stock: list[int] = []  # 재고 팩 id, 먼저 들어온 순
+        # 3단계에서는 나중 입고가 있으면 앞선 입고를 취소할 수 있었으므로 재고가 모자랄 수 있다.
+        # 모자란 수는 [기록 id, 남은 수]로 남겨 두고 뒤에 들어오는 팩으로 먼저 채운다.
+        owed: list[list[int]] = []
         balance = 0
         for rec_id, kind, count, ml, created_at in records:
             if kind == 'in':
@@ -66,7 +69,17 @@ def _move_stock_into_packs(bind) -> None:
                         ' VALUES (?, ?, ?, NULL, ?)',
                         (pid, each, rec_id, created_at),
                     )
-                    stock.append(cur.lastrowid)
+                    pack_id = cur.lastrowid
+                    if owed:
+                        bind.exec_driver_sql(
+                            'UPDATE pack SET out_record_id = ? WHERE id = ?',
+                            (owed[0][0], pack_id),
+                        )
+                        owed[0][1] -= 1
+                        if owed[0][1] == 0:
+                            owed.pop(0)
+                    else:
+                        stock.append(pack_id)
             else:  # use, discard, return
                 balance -= count
                 out, stock = stock[:count], stock[count:]
@@ -74,6 +87,8 @@ def _move_stock_into_packs(bind) -> None:
                     bind.exec_driver_sql(
                         'UPDATE pack SET out_record_id = ? WHERE id = ?', (rec_id, pack_id)
                     )
+                if len(out) < count:
+                    owed.append([rec_id, count - len(out)])
         if len(stock) != balance:
             raise RuntimeError(f'팩 옮기기 결과가 잔량과 다릅니다: 환자 {pid}')
 
