@@ -85,6 +85,9 @@ class GuardianViewModel(
 
     fun finish() = reset()
 
+    /** A general-device guardian screen was opened: start the idle clock now, so it times out even if nothing is typed. */
+    fun armIdle() = idle.arm()
+
     override fun onCleared() {
         // Cleared mid-session (e.g. admin release): do not leave the guardian token valid on the server.
         val t = token

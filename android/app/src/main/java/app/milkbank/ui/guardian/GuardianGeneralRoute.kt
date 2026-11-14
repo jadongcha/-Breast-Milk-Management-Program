@@ -46,6 +46,8 @@ fun GuardianGeneralRoute(container: AppContainer, onExit: () -> Unit) {
         },
     )
 
+    LaunchedEffect(Unit) { vm.armIdle() }
+
     val ended by vm.sessionEnded.collectAsStateWithLifecycle()
     LaunchedEffect(ended) { if (ended > 0L) onExit() }
 

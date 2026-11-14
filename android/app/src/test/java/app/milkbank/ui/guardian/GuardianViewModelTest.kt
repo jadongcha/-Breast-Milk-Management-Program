@@ -381,6 +381,20 @@ class GuardianViewModelTest {
         assertTrue(repo.logouts.isEmpty())
     }
 
+    @Test fun general_idle_noInputAtAll_endsSessionAfterArmIdle() {
+        stationToken = null
+        val vm = vm()
+        vm.armIdle()
+        clock.advance(Duration.ofSeconds(59))
+        idle.check()
+        assertEquals(0L, vm.sessionEnded.value)
+        clock.advance(Duration.ofSeconds(1))
+        idle.check()
+        assertEquals(1L, vm.sessionEnded.value)
+        assertEquals(start, vm.step.value)
+        assertTrue(repo.logouts.isEmpty())
+    }
+
     @Test fun general_other401_endsSessionAndBumps() {
         stationToken = null
         val vm = vm()
