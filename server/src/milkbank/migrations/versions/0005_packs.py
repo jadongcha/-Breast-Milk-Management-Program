@@ -42,6 +42,14 @@ def upgrade() -> None:
     _move_stock_into_packs(op.get_bind())
 
 
+def _split_ml(ml, count):
+    # 나누어떨어지고 팩당 1~1000mL일 때만 나눈다. 아니면 지어내지 않고 모름(None)으로 둔다.
+    if ml is None or not count or ml % count != 0:
+        return None
+    each = ml // count
+    return each if 1 <= each <= 1000 else None
+
+
 def _move_stock_into_packs(bind) -> None:
     # 모델을 import하지 않고 SQL만 쓴다(마이그레이션은 모델이 바뀌어도 그대로여야 한다).
     patient_ids = [r[0] for r in bind.exec_driver_sql('SELECT id FROM patient ORDER BY id')]
@@ -62,7 +70,7 @@ def _move_stock_into_packs(bind) -> None:
         for rec_id, kind, count, ml, created_at in records:
             if kind == 'in':
                 balance += count
-                each = ml // count if ml is not None and count and ml % count == 0 else None
+                each = _split_ml(ml, count)
                 for _ in range(count):
                     cur = bind.exec_driver_sql(
                         'INSERT INTO pack (patient_id, ml, in_record_id, out_record_id, created_at)'
@@ -96,7 +104,7 @@ def _move_stock_into_packs(bind) -> None:
         "SELECT id, count, ml FROM submission WHERE status = 'pending'"
     ).fetchall()
     for sub_id, count, ml in pending:
-        each = ml // count if ml is not None and count and ml % count == 0 else None
+        each = _split_ml(ml, count)
         bind.exec_driver_sql(
             'UPDATE submission SET pack_mls = ? WHERE id = ?',
             (json.dumps([each] * count), sub_id),

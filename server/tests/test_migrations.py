@@ -611,6 +611,7 @@ def test_upgrade_0004_builds_packs_matching_balance(tmp_path, clock):
             in3 = _rec(conn, 1, "in", 1, 6, ml=100)
             _rec(conn, 1, "cancel", 1, 7, target=in3)
             _rec(conn, 2, "in", 3, 8, ml=100)
+            _rec(conn, 2, "in", 2, 9, ml=3000)  # 팩당 1500mL: 1~1000 밖이라 모름
             conn.commit()
         migrate(eng, path, clock.now())
         assert _version(eng) == "0005"
@@ -632,7 +633,7 @@ def test_upgrade_0004_builds_packs_matching_balance(tmp_path, clock):
             b = conn.execute(
                 text("SELECT ml FROM pack WHERE patient_id = 2 AND out_record_id IS NULL")
             ).fetchall()
-            assert [r[0] for r in b] == [None, None, None]
+            assert [r[0] for r in b] == [None] * 5
             assert conn.execute(
                 text("SELECT count(*) FROM stock_record WHERE ml_unknown != 0")
             ).scalar() == 0
@@ -647,7 +648,8 @@ def test_upgrade_0004_pending_submission_pack_mls(tmp_path, clock):
         with eng.connect() as conn:
             _at_0004(eng, conn)
             for count, ml, status in ((3, 240, "pending"), (3, 100, "pending"),
-                                      (2, 100, "confirmed")):
+                                      (2, 100, "confirmed"), (3, 3600, "pending"),
+                                      (2, None, "pending"), (2, 100, "rejected")):
                 conn.execute(
                     text(
                         "INSERT INTO submission (patient_id, station_id, count, ml,"
@@ -660,7 +662,10 @@ def test_upgrade_0004_pending_submission_pack_mls(tmp_path, clock):
         migrate(eng, path, clock.now())
         with eng.connect() as conn:
             rows = conn.execute(text("SELECT pack_mls FROM submission ORDER BY id")).fetchall()
-        assert [r[0] for r in rows] == ["[80, 80, 80]", "[null, null, null]", None]
+        assert [r[0] for r in rows] == [
+            "[80, 80, 80]", "[null, null, null]", None, "[null, null, null]",
+            "[null, null]", None,
+        ]
     finally:
         eng.dispose()
 
