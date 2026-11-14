@@ -124,6 +124,7 @@ class Patient(Base):
         _enum_type(AlertState), default=AlertState.NORMAL
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    erased_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class StockRecord(Base):
@@ -143,6 +144,7 @@ class StockRecord(Base):
     patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
     kind: Mapped[RecordKind] = mapped_column(_enum_type(RecordKind))
     count: Mapped[int]
+    ml: Mapped[int | None]
     discard_reason: Mapped[DiscardReason | None] = mapped_column(
         _enum_type(DiscardReason)
     )
@@ -194,11 +196,13 @@ class Submission(Base):
     patient_id: Mapped[int] = mapped_column(ForeignKey("patient.id"))
     station_id: Mapped[int | None] = mapped_column(ForeignKey("station.id"))
     count: Mapped[int]
+    ml: Mapped[int | None]
     submitted_at: Mapped[datetime] = mapped_column(UTCDateTime)
     status: Mapped[SubmissionStatus] = mapped_column(
         _enum_type(SubmissionStatus), default=SubmissionStatus.PENDING
     )
     confirmed_count: Mapped[int | None]
+    confirmed_ml: Mapped[int | None]
     handled_by: Mapped[int | None] = mapped_column(ForeignKey("staff.id"))
     handled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     intake_record_id: Mapped[int | None] = mapped_column(ForeignKey("stock_record.id"))
@@ -215,3 +219,10 @@ class GuardianSession(Base):
     station_id: Mapped[int | None] = mapped_column(ForeignKey("station.id"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class Setting(Base):
+    __tablename__ = "setting"
+
+    key: Mapped[str] = mapped_column(primary_key=True)
+    value: Mapped[int]

@@ -58,7 +58,7 @@ def test_serve_migrates_before_running(tmp_path, monkeypatch):
     from contextlib import closing
 
     with closing(sqlite3.connect(db_path)) as c:
-        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0003"
+        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0004"
 
 
 def test_serve_legacy_db_exits(tmp_path, monkeypatch, capsys):

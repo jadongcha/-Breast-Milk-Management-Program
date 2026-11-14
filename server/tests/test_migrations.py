@@ -38,7 +38,7 @@ def test_new_db_is_at_head(tmp_path, clock):
     eng = make_engine(path)
     try:
         assert migrate(eng, path, clock.now()) is None
-        assert _version(eng) == "0003"
+        assert _version(eng) == "0004"
         tables = set(inspect(eng).get_table_names())
         assert {
             "staff", "auth_session", "patient", "stock_record", "login_attempt",
@@ -82,8 +82,8 @@ def test_pending_upgrade_makes_backup(tmp_path, clock):
             conn.commit()
         backup = migrate(eng, path, clock.now())
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
-        assert _version(eng) == "0003"
+        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
+        assert _version(eng) == "0004"
     finally:
         eng.dispose()
 
@@ -352,9 +352,9 @@ def test_upgrade_0001_with_data_to_0002(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0001"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0003"
+        assert _version(eng) == "0004"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT count(*) FROM staff")).scalar() == 1
         assert {"station", "submission", "guardian_session"} <= set(
@@ -440,9 +440,9 @@ def test_upgrade_0002_with_data_to_0003(tmp_path, clock):
             conn.commit()
         assert _version(eng) == "0002"
         backup = migrate(eng, path, clock.now())
-        assert _version(eng) == "0003"
+        assert _version(eng) == "0004"
         assert backup is not None and backup.exists()
-        assert backup.name == "milkbank-20261110T000000Z-before-0003.db"
+        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
         with eng.connect() as conn:
             assert conn.execute(text("SELECT station_id FROM submission")).scalar() == 1
             assert conn.execute(text("SELECT count(*) FROM submission")).scalar() == 1
@@ -467,5 +467,97 @@ def test_upgrade_0002_with_data_to_0003(tmp_path, clock):
                     " VALUES (1, NULL, 1, '2026-11-10 00:00:00', 'pending')"
                 )
             )
+    finally:
+        eng.dispose()
+
+
+def _seed_0003(conn):
+    conn.execute(
+        text(
+            "INSERT INTO staff (username, name, role, password_hash,"
+            " must_change_password, active, created_at)"
+            " VALUES ('a', 'a', 'admin', 'h', 0, 1, '2026-11-10 00:00:00')"
+        )
+    )
+    conn.execute(
+        text(
+            "INSERT INTO patient (reg_no, baby_name, bed, guardian_name,"
+            " guardian_phone, status, admitted_on, alert_enabled, alert_state,"
+            " created_at)"
+            " VALUES ('R1', 'b', '1', 'g', '01012345678', 'admitted',"
+            " '2026-11-10', 0, 'normal', '2026-11-10 00:00:00')"
+        )
+    )
+    conn.execute(
+        text(
+            "INSERT INTO stock_record (patient_id, kind, count, staff_id, created_at)"
+            " VALUES (1, 'in', 3, 1, '2026-11-10 00:00:00')"
+        )
+    )
+    conn.execute(
+        text(
+            "INSERT INTO submission (patient_id, station_id, count,"
+            " submitted_at, status)"
+            " VALUES (1, NULL, 2, '2026-11-10 00:00:00', 'pending')"
+        )
+    )
+
+
+def test_upgrade_0003_with_data_to_0004(tmp_path, clock):
+    path = tmp_path / "u4.db"
+    eng = make_engine(path)
+    try:
+        with eng.connect() as conn:
+            command.upgrade(_alembic_config(conn), "0003")
+            conn.commit()
+            _seed_0003(conn)
+            conn.commit()
+        assert _version(eng) == "0003"
+        backup = migrate(eng, path, clock.now())
+        assert _version(eng) == "0004"
+        assert backup is not None and backup.exists()
+        assert backup.name == "milkbank-20261110T000000Z-before-0004.db"
+        with eng.connect() as conn:
+            assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
+            assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
+            assert conn.execute(text("SELECT reg_no FROM patient")).scalar() == "R1"
+            assert conn.execute(text("SELECT ml FROM stock_record")).scalar() is None
+            assert conn.execute(text("SELECT ml FROM submission")).scalar() is None
+            assert (
+                conn.execute(text("SELECT confirmed_ml FROM submission")).scalar()
+                is None
+            )
+            assert (
+                conn.execute(text("SELECT erased_at FROM patient")).scalar() is None
+            )
+            assert conn.execute(text("SELECT count(*) FROM setting")).scalar() == 0
+    finally:
+        eng.dispose()
+
+
+def test_downgrade_0004_to_0003(tmp_path, clock):
+    path = tmp_path / "d3.db"
+    eng = make_engine(path)
+    try:
+        migrate(eng, path, clock.now())
+        with eng.connect() as conn:
+            _seed_0003(conn)
+            conn.execute(text("UPDATE stock_record SET ml = 100"))
+            conn.execute(text("INSERT INTO setting (key, value) VALUES ('days_threshold', 2)"))
+            conn.commit()
+            with foreign_keys_off(conn):
+                command.downgrade(_alembic_config(conn), "0003")
+            conn.commit()
+        assert _version(eng) == "0003"
+        insp = inspect(eng)
+        assert "setting" not in insp.get_table_names()
+        cols = lambda t: {c["name"] for c in insp.get_columns(t)}
+        assert "ml" not in cols("stock_record")
+        assert not {"ml", "confirmed_ml"} & cols("submission")
+        assert "erased_at" not in cols("patient")
+        with eng.connect() as conn:
+            assert conn.execute(text("SELECT count FROM stock_record")).scalar() == 3
+            assert conn.execute(text("SELECT count FROM submission")).scalar() == 2
+            assert conn.execute(text("SELECT reg_no FROM patient")).scalar() == "R1"
     finally:
         eng.dispose()

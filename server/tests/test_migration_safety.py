@@ -11,8 +11,8 @@ BROKEN = '''"""broken"""
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0004"
-down_revision = "0003"
+revision = "0005"
+down_revision = "0004"
 branch_labels = None
 depends_on = None
 
@@ -36,7 +36,7 @@ def broken_dir(tmp_path, monkeypatch):
     shutil.copytree(
         migrate_module.MIGRATIONS_DIR, dest, ignore=shutil.ignore_patterns("__pycache__")
     )
-    (dest / "versions" / "0004_broken.py").write_text(BROKEN, encoding="utf-8")
+    (dest / "versions" / "0005_broken.py").write_text(BROKEN, encoding="utf-8")
     monkeypatch.setattr(migrate_module, "MIGRATIONS_DIR", dest)
     return dest
 
@@ -54,7 +54,7 @@ def test_broken_migration_rolls_back_completely(seeded_engine, tmp_path, clock, 
     db_path = tmp_path / "test.db"  # engine 픽스처의 DB 파일
     with pytest.raises(RuntimeError, match="외래 키가 깨진 행"):
         migrate(seeded_engine, db_path, clock.now())
-    assert _version(seeded_engine) == "0003"
+    assert _version(seeded_engine) == "0004"
     assert "tmp_x" not in inspect(seeded_engine).get_table_names()
     with seeded_engine.connect() as conn:
         for t, n in counts.items():
@@ -68,7 +68,7 @@ def test_broken_migration_new_db_leaves_no_partial_schema(tmp_path, clock, broke
     try:
         with pytest.raises(RuntimeError, match="외래 키가 깨진 행"):
             migrate(eng, path, clock.now())
-        assert _version(eng) == "0003"
+        assert _version(eng) == "0004"
         assert "tmp_x" not in inspect(eng).get_table_names()
     finally:
         eng.dispose()
