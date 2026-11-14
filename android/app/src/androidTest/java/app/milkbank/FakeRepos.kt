@@ -12,6 +12,9 @@ import app.milkbank.api.StationSelfDto
 import app.milkbank.api.SubmissionBriefDto
 import app.milkbank.api.DailyDto
 import app.milkbank.api.OverviewDto
+import app.milkbank.api.OverviewRowDto
+import app.milkbank.api.DailyRowDto
+import app.milkbank.api.DailyTotalDto
 import app.milkbank.api.SeriesPointDto
 import app.milkbank.api.SettingsDto
 import app.milkbank.api.SettingsPatch
@@ -46,12 +49,18 @@ const val FAKE_STATION_NAME = "Station 1"
 const val FAKE_GUARDIAN_PHONE = "01012345678"
 const val FAKE_USERNAME = "nurse1"
 const val FAKE_PASSWORD = "test-pass-1"
+const val FAKE_ADMIN_USERNAME = "admin1"
+const val FAKE_ADMIN_PASSWORD = "test-pass-2"
 
 val fakeNurse = StaffDto(
     id = 1, username = FAKE_USERNAME, name = "김간호", role = "nurse", active = true, mustChangePassword = false,
 )
 
 /** One patient whose balance the fake stock repository updates; shared by the fake repositories. */
+val fakeAdminStaff = StaffDto(
+    id = 2, username = FAKE_ADMIN_USERNAME, name = "박관리", role = "admin", active = true, mustChangePassword = false,
+)
+
 class FakeWorld {
     @Volatile var balance = 0
     @Volatile var pending = 0
@@ -74,6 +83,8 @@ class FakeAuth(private val session: SessionManager) : AuthRepository {
     override suspend fun login(username: String, password: String): ApiResult<LoginResponse> =
         if (username == FAKE_USERNAME && password == FAKE_PASSWORD) {
             ApiResult.Ok(LoginResponse("fake-token", false, fakeNurse))
+        } else if (username == FAKE_ADMIN_USERNAME && password == FAKE_ADMIN_PASSWORD) {
+            ApiResult.Ok(LoginResponse("fake-admin-token", false, fakeAdminStaff))
         } else {
             ApiResult.Err(ApiError(401, "아이디 또는 비밀번호가 올바르지 않습니다"))
         }
@@ -131,8 +142,23 @@ class FakeStaff : StaffRepository {
 private val unsupported = ApiError(null, "unsupported in fake")
 
 class FakeAdmin : AdminRepository {
-    override suspend fun overview(): ApiResult<OverviewDto> = ApiResult.Err(unsupported)
-    override suspend fun daily(date: String?): ApiResult<DailyDto> = ApiResult.Err(unsupported)
+    override suspend fun overview(): ApiResult<OverviewDto> = ApiResult.Ok(
+        OverviewDto(
+            admitted = 1, low = 1, todayInPacks = 2, todayInMl = 240, todayUsePacks = 0, todayUseMl = null,
+            pendingSubmissions = 0,
+            rows = listOf(
+                OverviewRowDto(10, FAKE_REG_NO, "3", 1, 1.0, 1.0, "low", 0),
+            ),
+        ),
+    )
+
+    override suspend fun daily(date: String?): ApiResult<DailyDto> = ApiResult.Ok(
+        DailyDto(
+            date = date ?: "2026-11-14",
+            rows = listOf(DailyRowDto(10, FAKE_REG_NO, "3", 2, 240, 1, null, 0, null, 0)),
+            total = DailyTotalDto(2, 240, 1, null, 0, null, 0),
+        ),
+    )
     override suspend fun series(days: Int, patientId: Int?): ApiResult<List<SeriesPointDto>> = ApiResult.Err(unsupported)
     override suspend fun exportCsv(from: String, to: String): ApiResult<ByteArray> = ApiResult.Err(unsupported)
     override suspend fun settings(): ApiResult<SettingsDto> = ApiResult.Ok(SettingsDto(3, 6, 7, 10, 30))
