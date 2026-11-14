@@ -256,3 +256,17 @@ def test_erase_due_skips_failing_patient(client, app, admin_token, world):
     with app.state.session_factory() as db:
         assert db.get(Patient, p1).erased_at is None
         assert db.get(Patient, p2).erased_at is not None
+
+
+def test_erase_pass_truncates_wal(client, app, admin_token, world):
+    from milkbank.main import _erase_due_once
+
+    p = world["p1"]
+    assert _discharge(client, admin_token, p).status_code == 200
+    app.state.clock = FakeClock(app.state.clock.now() + timedelta(days=31))
+    wal = app.state.config.db_path.with_name(app.state.config.db_path.name + "-wal")
+    assert wal.exists() and wal.stat().st_size > 0
+    _erase_due_once(app)
+    with app.state.session_factory() as db:
+        assert db.get(Patient, p).erased_at is not None
+    assert not wal.exists() or wal.stat().st_size == 0

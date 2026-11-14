@@ -32,6 +32,13 @@ def _erase_due_once(app: FastAPI) -> None:
     prune_backups(app.state.config.backups_dir, app.state.clock, retention)
     if ids:
         log.info("보관 기간이 지난 환자 %d명의 개인정보를 말소했습니다", len(ids))
+        # 말소한 내용이 WAL 파일에 남지 않도록 비운다.
+        # 트랜잭션 밖에서 실행해야 하므로 드라이버 연결을 직접 쓴다.
+        raw = app.state.engine.raw_connection()
+        try:
+            raw.driver_connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        finally:
+            raw.close()
 
 
 async def _run_pass(app: FastAPI) -> None:

@@ -15,6 +15,7 @@ def test_sqlite_pragmas(engine):
         assert c.exec_driver_sql("PRAGMA journal_mode").scalar() == "wal"
         assert c.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
         assert c.exec_driver_sql("PRAGMA busy_timeout").scalar() == 5000
+        assert c.exec_driver_sql("PRAGMA secure_delete").scalar() == 1
 
 
 def test_utc_datetime_roundtrip(db, clock):

@@ -19,6 +19,8 @@ def make_engine(db_path: Path) -> Engine:
         cur.execute("PRAGMA journal_mode=WAL")
         cur.execute("PRAGMA foreign_keys=ON")
         cur.execute("PRAGMA busy_timeout=5000")
+        # 지운 내용(말소한 개인정보)이 DB 파일에 남지 않도록 0으로 덮어쓴다.
+        cur.execute("PRAGMA secure_delete=ON")
         cur.close()
 
     @event.listens_for(engine, "begin")
