@@ -9,6 +9,7 @@ import app.milkbank.core.ApiResult
 import app.milkbank.core.FakeClock
 import app.milkbank.data.GuardianRepository
 import app.milkbank.station.GuardianIdle
+import app.milkbank.ui.components.PackMlsState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -104,88 +105,155 @@ class GuardianViewModelTest {
         )
     }
 
+    private fun okResponse(count: Int = 3, balanceMl: Int = 0, unknown: Int = 0) =
+        ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.EPOCH), 2, 3, balanceMl, unknown))
+
+    private fun pick(vm: GuardianViewModel) = vm.step.value as GuardianStep.PickCount
+
+    private fun fill(vm: GuardianViewModel, vararg texts: String) {
+        texts.forEachIndexed { i, t -> vm.setPackMls(pick(vm).packMls.setAt(i, t)) }
+    }
+
+    /** Login, count [n], fields [texts] (blank = unknown), then to the confirmation. */
+    private fun toConfirm(vm: GuardianViewModel, n: Int, vararg texts: String) {
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(n)
+        fill(vm, *texts)
+        vm.toConfirm()
+    }
+
     @Test fun submit_success_showsDone() {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
-        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, null), vm.step.value)
-        repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH), 2, 3)) }
+        vm.pickCount(3); vm.toConfirm()
+        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, PackMlsState.empty(3)), vm.step.value)
+        repo.submitHandler = { okResponse() }
         vm.submit()
-        assertEquals(GuardianStep.Done(b1, 3, null, 2, 3), vm.step.value)
+        assertEquals(GuardianStep.Done(b1, 3, listOf(null, null, null), 2, 3), vm.step.value)
     }
 
-    private fun toConfirm(vm: GuardianViewModel, mlText: String?) {
+    @Test fun pickCount_resizesFields_doesNotJumpToConfirm() {
+        val vm = vm()
         login(vm)
         vm.startSubmit()
-        if (mlText != null) vm.setMl(mlText)
         vm.pickCount(3)
+        assertEquals(GuardianStep.PickCount(b1, 3, PackMlsState.empty(3)), vm.step.value)
+        fill(vm, "80", "90")
+        vm.pickCount(2) // typed values stay for the leading packs
+        assertEquals(GuardianStep.PickCount(b1, 2, PackMlsState(listOf("80", "90"))), vm.step.value)
+        vm.pickCount(4)
+        assertEquals(PackMlsState(listOf("80", "90", "", "")), pick(vm).packMls)
+        assertEquals(0, repo.submitCalls)
     }
 
-    @Test fun submit_sendsMl() {
+    @Test fun toConfirm_needsACount() {
         val vm = vm()
-        toConfirm(vm, "240")
-        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, 240), vm.step.value)
-        repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, 240), 2, 3)) }
+        login(vm)
+        vm.startSubmit()
+        vm.toConfirm()
+        assertEquals(GuardianStep.PickCount(b1, null), vm.step.value)
+        assertFalse(pick(vm).canSubmit)
+    }
+
+    @Test fun submit_sendsPackMls() {
+        val vm = vm()
+        toConfirm(vm, 3, "80", "", "90")
+        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, PackMlsState(listOf("80", "", "90"))), vm.step.value)
+        repo.submitHandler = { okResponse(balanceMl = 170, unknown = 1) }
         vm.submit()
-        assertEquals(listOf<List<Int?>?>(null), repo.submittedPackMls) // TEMP bridge (Task 3 sends per-pack volumes)
-        assertEquals(GuardianStep.Done(b1, 3, 240, 2, 3), vm.step.value)
+        assertEquals(listOf<List<Int?>?>(listOf(80, null, 90)), repo.submittedPackMls)
+        assertEquals(GuardianStep.Done(b1, 3, listOf(80, null, 90), 2, 3, 170, 1), vm.step.value)
     }
 
-    @Test fun submit_emptyMlSendsNull() {
+    @Test fun submit_allBlankSendsNullEntries() {
         val vm = vm()
-        toConfirm(vm, "  ")
-        repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, null), 2, 3)) }
+        toConfirm(vm, 2, "  ", "")
+        repo.submitHandler = { okResponse(2) }
         vm.submit()
-        assertEquals(listOf<List<Int?>?>(null), repo.submittedPackMls)
-        assertEquals(GuardianStep.Done(b1, 3, null, 2, 3), vm.step.value)
+        assertEquals(listOf<List<Int?>?>(listOf(null, null)), repo.submittedPackMls)
     }
 
-    @Test fun invalidMl_blocksSubmit() {
+    @Test fun invalidPackMl_blocksSubmit() {
         val vm = vm()
-        toConfirm(vm, "0")
+        login(vm)
+        vm.startSubmit()
+        vm.pickCount(3)
+        fill(vm, "80", "0")
+        assertFalse(pick(vm).canSubmit)
+        vm.toConfirm()
         vm.submit()
         assertEquals(0, repo.submitCalls)
-        assertEquals(GuardianStep.PickCount(b1, null, "0"), vm.step.value)
+        assertEquals(GuardianStep.PickCount(b1, 3, PackMlsState(listOf("80", "0", ""))), vm.step.value)
+        fill(vm, "80", "1001")
+        assertFalse(pick(vm).canSubmit)
+        fill(vm, "80", "")
+        assertTrue(pick(vm).canSubmit)
     }
 
-    @Test fun packButtons_disabledWhileMlInvalid_enabledWhenValidOrEmpty() {
+    @Test fun invalidAllField_blocksSubmit() {
         val vm = vm()
         login(vm)
-        val pick = { vm.step.value as GuardianStep.PickCount }
         vm.startSubmit()
-        assertEquals(true, pick().packButtonsEnabled) // empty
-        vm.setMl("0")
-        assertEquals(false, pick().packButtonsEnabled)
-        vm.setMl("20001")
-        assertEquals(false, pick().packButtonsEnabled)
-        vm.setMl("240")
-        assertEquals(true, pick().packButtonsEnabled)
+        vm.pickCount(2)
+        vm.setPackMls(pick(vm).packMls.setAll("5000"))
+        assertFalse(pick(vm).canSubmit)
+        vm.toConfirm()
+        assertTrue(vm.step.value is GuardianStep.PickCount)
     }
 
-    @Test fun back_keepsMlText() {
+    @Test fun back_keepsTypedPackMls() {
         val vm = vm()
-        toConfirm(vm, "240")
+        toConfirm(vm, 3, "080", "", "90")
         vm.back()
-        assertEquals(GuardianStep.PickCount(b1, 3, "240"), vm.step.value)
+        assertEquals(GuardianStep.PickCount(b1, 3, PackMlsState(listOf("080", "", "90"))), vm.step.value)
     }
 
-    @Test fun setMl_rearmsIdle() {
+    @Test fun setPackMls_rearmsIdle() {
         val vm = vm()
         login(vm)
         vm.startSubmit()
+        vm.pickCount(2)
         clock.advance(Duration.ofSeconds(50))
-        vm.setMl("2")
+        vm.setPackMls(pick(vm).packMls.setAt(0, "2"))
         clock.advance(Duration.ofSeconds(50))
         idle.check()
-        assertEquals(GuardianStep.PickCount(b1, null, "2"), vm.step.value)
+        assertEquals(GuardianStep.PickCount(b1, 2, PackMlsState(listOf("2", ""))), vm.step.value)
+    }
+
+    @Test fun setPackMls_ignoredWithoutPickStep() {
+        val vm = vm()
+        login(vm)
+        vm.setPackMls(PackMlsState(listOf("80")))
+        assertEquals(GuardianStep.Stock(b1), vm.step.value)
+    }
+
+    @Test fun finish_clearsPackMls() {
+        val vm = vm()
+        toConfirm(vm, 3, "80", "90", "100")
+        vm.finish()
+        assertEquals(start, vm.step.value)
+        login(vm) // the next guardian
+        vm.startSubmit()
+        assertEquals(GuardianStep.PickCount(b1, null), vm.step.value)
+        assertFalse(vm.step.value.toString().contains("80"))
+    }
+
+    @Test fun idle_clearsPackMls() {
+        val vm = vm()
+        toConfirm(vm, 3, "80", "90", "100")
+        clock.advance(Duration.ofSeconds(60))
+        idle.check()
+        assertEquals(start, vm.step.value)
+        assertFalse(vm.step.value.toString().contains("90"))
     }
 
     @Test fun submitWhileSubmitting_isIgnored() {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         val gate = CompletableDeferred<Unit>()
         repo.submitHandler = {
             gate.await()
@@ -203,7 +271,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         repo.submitHandler = { ApiResult.Err(ApiError(null, "net")) }
         repo.babiesHandler = { ApiResult.Ok(listOf(b1.copy(pendingCount = 3))) }
         vm.submit()
@@ -214,7 +282,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         clock.advance(Duration.ofSeconds(60))
         idle.check()
         assertEquals(start, vm.step.value)
@@ -226,7 +294,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         val gate = CompletableDeferred<Unit>()
         repo.submitHandler = {
             gate.await()
@@ -254,7 +322,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(2)
+        vm.pickCount(2); vm.toConfirm()
         repo.submitHandler = { ApiResult.Err(ApiError(null, "net")) }
         repo.babiesHandler = { ApiResult.Err(ApiError(401, "x", "station_invalid")) }
         vm.submit()
@@ -266,7 +334,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(2)
+        vm.pickCount(2); vm.toConfirm()
         repo.submitHandler = { ApiResult.Err(ApiError(401, "만료")) }
         vm.submit()
         assertEquals(start.copy(error = "세션 끝"), vm.step.value)
@@ -288,7 +356,7 @@ class GuardianViewModelTest {
         vm.startSubmit() // 20 s: no ping yet
         assertEquals(emptyList<String>(), calls)
         clock.advance(Duration.ofSeconds(20)); idle.touch()
-        vm.pickCount(3) // 40 s since login: ping
+        vm.pickCount(3); vm.toConfirm() // 40 s since login: ping
         assertEquals(listOf("babies"), calls)
         clock.advance(Duration.ofSeconds(5)); idle.touch()
         vm.submit() // 5 s since the ping: no second one
@@ -300,7 +368,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         val calls = mutableListOf<String>()
         repo.babiesHandler = { calls += "babies"; ApiResult.Ok(listOf(b1)) }
         repo.submitHandler = { calls += "submit"; okSubmit }
@@ -317,7 +385,7 @@ class GuardianViewModelTest {
         repo.submitHandler = { okSubmit }
         clock.advance(Duration.ofSeconds(29))
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         vm.submit()
         assertEquals(0, babiesCalls)
         assertEquals(1, repo.submitCalls)
@@ -327,7 +395,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         repo.babiesHandler = { ApiResult.Err(ApiError(401, "만료")) }
         clock.advance(Duration.ofSeconds(40))
         vm.submit()
@@ -340,7 +408,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         repo.babiesHandler = { ApiResult.Err(ApiError(null, "net")) }
         clock.advance(Duration.ofSeconds(40))
         vm.submit()
@@ -353,7 +421,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         repo.babiesHandler = { ApiResult.Err(ApiError(401, "x", "station_invalid")) }
         clock.advance(Duration.ofSeconds(40))
         vm.submit()
@@ -386,7 +454,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(3)
+        vm.pickCount(3); vm.toConfirm()
         clock.advance(Duration.ofSeconds(60))
         idle.check()
         vm.submit()
@@ -469,7 +537,7 @@ class GuardianViewModelTest {
         val vm = vm()
         login(vm)
         vm.startSubmit()
-        vm.pickCount(2)
+        vm.pickCount(2); vm.toConfirm()
         repo.babiesHandler = { ApiResult.Err(ApiError(401, "x")) }
         clock.advance(Duration.ofSeconds(45))
         vm.submit()

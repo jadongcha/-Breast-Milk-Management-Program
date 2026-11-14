@@ -9,9 +9,7 @@ import app.milkbank.core.Clock
 import app.milkbank.core.isStationInvalid
 import app.milkbank.data.GuardianRepository
 import app.milkbank.station.GuardianIdle
-import app.milkbank.ui.components.MlParse
-import app.milkbank.ui.components.parseMl
-import app.milkbank.ui.components.valueOrNull
+import app.milkbank.ui.components.PackMlsState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,12 +30,17 @@ sealed interface GuardianStep {
     data class Start(val phone: String, val babyId: String, val error: String?, val submitting: Boolean) : GuardianStep
     data class SelectBaby(val babies: List<BabyDto>) : GuardianStep
     data class Stock(val baby: BabyDto, val notice: String? = null) : GuardianStep
-    data class PickCount(val baby: BabyDto, val count: Int?, val mlText: String = "") : GuardianStep {
-        /** The pack buttons stay off while the volume text is out of range; the field's error line says why. */
-        val packButtonsEnabled: Boolean get() = parseMl(mlText) != MlParse.Invalid
+    /** [count] is null until a pack button is pressed; [packMls] has one field per pack and follows the count. */
+    data class PickCount(val baby: BabyDto, val count: Int?, val packMls: PackMlsState = PackMlsState(emptyList())) : GuardianStep {
+        /** [제출] needs a count and every volume field (and the "same for all" field) in range. */
+        val canSubmit: Boolean get() = count != null && packMls.values != null && !packMls.allInvalid
     }
-    data class ConfirmSubmit(val baby: BabyDto, val count: Int, val ml: Int?) : GuardianStep
-    data class Done(val baby: BabyDto, val count: Int, val ml: Int?, val balance: Int, val pendingCount: Int) : GuardianStep
+    data class ConfirmSubmit(val baby: BabyDto, val count: Int, val packMls: PackMlsState) : GuardianStep
+    /** [balanceMl] and [unknown] describe the confirmed stock after this submission. */
+    data class Done(
+        val baby: BabyDto, val count: Int, val packMls: List<Int?>, val balance: Int, val pendingCount: Int,
+        val balanceMl: Int = 0, val unknown: Int = 0,
+    ) : GuardianStep
 }
 
 /** Guardian session on a station tablet or a general hospital device. The guardian token lives here only; logout and idle drop everything. */
@@ -174,19 +177,27 @@ class GuardianViewModel(
         keepAliveInBackground()
     }
 
-    /** Optional total volume typed on the number-pad screen; digits only, validated when a count is picked. */
-    fun setMl(text: String) {
+    /** Volume fields typed under the pack buttons; the state keeps exactly what was typed. */
+    fun setPackMls(state: PackMlsState) {
         val cur = _step.value as? GuardianStep.PickCount ?: return
         idle.arm()
-        _step.value = cur.copy(mlText = text.filter { it.isDigit() || it == ' ' }.take(8))
+        _step.value = cur.copy(packMls = state)
     }
 
+    /** A pack button: the fields follow the count. Nothing is submitted until [toConfirm]. */
     fun pickCount(n: Int) {
         val cur = _step.value as? GuardianStep.PickCount ?: return
         if (n !in 1..GUARDIAN_MAX_PACKS) return
-        val parsed = parseMl(cur.mlText)
-        if (parsed == MlParse.Invalid) return // the field shows the range error; fix it first
-        _step.value = GuardianStep.ConfirmSubmit(cur.baby, n, parsed.valueOrNull())
+        _step.value = cur.copy(count = n, packMls = cur.packMls.resize(n))
+        keepAliveInBackground()
+    }
+
+    /** [제출] on the pick screen: to the confirmation, only with a count and valid volumes. */
+    fun toConfirm() {
+        val cur = _step.value as? GuardianStep.PickCount ?: return
+        val n = cur.count ?: return
+        if (!cur.canSubmit) return
+        _step.value = GuardianStep.ConfirmSubmit(cur.baby, n, cur.packMls)
         keepAliveInBackground()
     }
 
@@ -228,11 +239,11 @@ class GuardianViewModel(
         }
     }
 
-    /** One step back: confirmation to the number pad, number pad to the stock screen. Ignored while sending. */
+    /** One step back: confirmation to the pick screen, pick screen to the stock screen. Ignored while sending. */
     fun back() {
         if (_submitting.value) return
         when (val cur = _step.value) {
-            is GuardianStep.ConfirmSubmit -> _step.value = GuardianStep.PickCount(cur.baby, cur.count, cur.ml?.toString() ?: "")
+            is GuardianStep.ConfirmSubmit -> _step.value = GuardianStep.PickCount(cur.baby, cur.count, cur.packMls)
             is GuardianStep.PickCount -> _step.value = GuardianStep.Stock(cur.baby)
             else -> {}
         }
@@ -242,6 +253,7 @@ class GuardianViewModel(
         val cur = _step.value as? GuardianStep.ConfirmSubmit ?: return
         val st = stationToken()
         val t = token ?: return
+        val packMls = cur.packMls.values ?: return
         // Set before launching so a second tap can never send a second submission.
         if (_submitting.value) return
         _submitting.value = true
@@ -257,10 +269,13 @@ class GuardianViewModel(
                     }
                     Alive.Ok -> {}
                 }
-                when (val r = guardian().submit(st, t, cur.baby.patientId, cur.count, null)) { // TEMP bridge: Task 3 sends per-pack volumes
+                when (val r = guardian().submit(st, t, cur.baby.patientId, cur.count, packMls)) {
                     is ApiResult.Ok -> if (g == gen) {
                         lastRequest = clock.now()
-                        _step.value = GuardianStep.Done(cur.baby, cur.count, cur.ml, r.value.balance, r.value.pendingCount)
+                        _step.value = GuardianStep.Done(
+                            cur.baby, cur.count, packMls, r.value.balance, r.value.pendingCount,
+                            r.value.balanceMl, r.value.unknownMlPacks,
+                        )
                     }
                     is ApiResult.Err -> if (g == gen && !endIfSessionOver(r.error)) {
                         // status null: the answer was lost, so whether it was saved is unknown.

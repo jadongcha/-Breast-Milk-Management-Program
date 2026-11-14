@@ -10,6 +10,7 @@ import app.milkbank.api.SettingsPatch
 import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.data.AdminRepository
+import app.milkbank.ui.components.StockFormats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -104,5 +105,27 @@ class OverviewViewModelTest {
         repo.handler = { ApiResult.Ok(OverviewRepo.DATA) }
         v.load(); advanceUntilIdle()
         assertNull(v.error.value)
+    }
+
+    // The real strings.xml, so the line wording is the one on screen.
+    private val xml = java.io.File("src/main/res/values/strings.xml").readText()
+    private fun res(name: String): String =
+        Regex("""<string name="$name">(.*?)</string>""").find(xml)!!.groupValues[1].removeSurrounding("\"")
+    private val formats = StockFormats(
+        packs = { String.format(res("packs"), it) },
+        withMl = { p, m -> String.format(res("stock_with_ml"), p, m) },
+        unknownSuffix = { String.format(res("stock_unknown_suffix"), it) },
+        allUnknown = { String.format(res("stock_all_unknown"), it) },
+        recordPartial = { c, m, u -> String.format(res("record_ml_partial"), c, m, u) },
+    )
+
+    private fun ml(balance: Int, ml: Int, unknown: Int) =
+        OverviewRowDto(1, "B1", "A1", balance, null, null, "enough", 0, ml, unknown)
+
+    @Test fun rowStockLine_showsRemainingMl() {
+        assertEquals("9팩 · 720mL", ml(9, 720, 0).stockLine(formats))
+        assertEquals("9팩 · 640mL · 용량 모름 1팩", ml(9, 640, 1).stockLine(formats))
+        assertEquals("2팩 · 용량 모름", ml(2, 0, 2).stockLine(formats))
+        assertEquals("0팩", ml(0, 0, 0).stockLine(formats))
     }
 }

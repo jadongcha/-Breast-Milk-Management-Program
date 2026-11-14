@@ -105,6 +105,8 @@ class GuardianFlowTest {
 
         waitForText("가져온 모유 팩 수를 눌러 주세요")
         rule.onNodeWithText("3").performClick()
+        waitForText("팩 3 (mL)")
+        rule.onNode(hasText("제출") and hasClickAction() and hasAnyAncestor(isDialog()).not()).performClick()
 
         waitForText("$FAKE_REG_NO 아기 모유 3팩을 제출합니다")
         assertNameNotShown()

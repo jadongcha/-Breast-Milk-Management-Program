@@ -38,6 +38,9 @@ import app.milkbank.R
 import app.milkbank.api.OverviewDto
 import app.milkbank.api.OverviewRowDto
 import app.milkbank.ui.MilkbankColors
+import app.milkbank.ui.components.StockFormats
+import app.milkbank.ui.components.rememberStockFormats
+import app.milkbank.ui.components.stockTextOf
 import app.milkbank.ui.patients.MilkCard
 
 private val MinButton = Modifier.heightIn(min = 56.dp)
@@ -136,6 +139,9 @@ fun OverviewScreen(viewModel: OverviewViewModel, onBack: () -> Unit, onOpenPatie
     }
 }
 
+/** What is left for a baby: packs, known mL and packs without a volume. */
+internal fun OverviewRowDto.stockLine(f: StockFormats): String = stockTextOf(balance, balanceMl, unknownMlPacks, f)
+
 @Composable
 private fun Summary(o: OverviewDto) {
     MilkCard {
@@ -199,7 +205,7 @@ private fun TableHeader() {
         val st = MaterialTheme.typography.labelLarge
         Text(stringResource(R.string.col_bed), Modifier.width(BedW), style = st)
         Text(stringResource(R.string.col_baby_id), Modifier.weight(1.4f), style = st)
-        Text(stringResource(R.string.col_balance), Modifier.weight(1f), style = st)
+        Text(stringResource(R.string.col_balance), Modifier.weight(1.8f), style = st)
         Text(stringResource(R.string.col_daily_avg), Modifier.weight(1f), style = st)
         Text(stringResource(R.string.col_days_left), Modifier.weight(1f), style = st)
         Text(stringResource(R.string.col_status), Modifier.width(StatusW), style = st)
@@ -210,6 +216,7 @@ private fun TableHeader() {
 @Composable
 private fun TableRow(r: OverviewRowDto, onClick: () -> Unit) {
     val none = stringResource(R.string.value_none)
+    val stock = r.stockLine(rememberStockFormats())
     MilkCard(Modifier.clickable(onClick = onClick)) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
@@ -219,7 +226,7 @@ private fun TableRow(r: OverviewRowDto, onClick: () -> Unit) {
             Text(r.bed, Modifier.width(BedW), style = st)
             Text(r.babyId, Modifier.weight(1.4f), style = st, fontWeight = FontWeight.Bold)
             Text(
-                stringResource(R.string.packs, r.balance), Modifier.weight(1f), style = st,
+                stock, Modifier.weight(1.8f), style = st,
                 color = if (r.status == "empty") MilkbankColors.Error else MaterialTheme.colorScheme.onSurface,
             )
             Text(r.dailyAvg.oneDecimal(none), Modifier.weight(1f), style = st)
@@ -239,6 +246,7 @@ private fun TableRow(r: OverviewRowDto, onClick: () -> Unit) {
 @Composable
 private fun CardRow(r: OverviewRowDto, onClick: () -> Unit) {
     val none = stringResource(R.string.value_none)
+    val stock = r.stockLine(rememberStockFormats())
     val detail = if (r.pendingPacks > 0) {
         stringResource(R.string.overview_row_detail_pending, r.dailyAvg.oneDecimal(none), r.daysLeft.oneDecimal(none), r.pendingPacks)
     } else {
@@ -260,7 +268,7 @@ private fun CardRow(r: OverviewRowDto, onClick: () -> Unit) {
                     r.babyId, Modifier.weight(1f).padding(start = 12.dp),
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 )
-                Text(stringResource(R.string.packs, r.balance), style = MaterialTheme.typography.titleMedium)
+                Text(stock, style = MaterialTheme.typography.titleMedium)
             }
             Text(
                 detail,

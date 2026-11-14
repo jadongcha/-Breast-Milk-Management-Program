@@ -66,4 +66,11 @@ class PackMlsTest {
         assertEquals(ParsedPackMl.Invalid, parsePackMl("8.5"))
         assertEquals(ParsedPackMl.Empty, parsePackMl("  "))
     }
+
+    @Test fun sumPackMls_knownAndUnknown() {
+        assertEquals(PackMlSum(170, 1), sumPackMls(listOf(80, null, 90)))
+        assertEquals(PackMlSum(null, 2), sumPackMls(listOf(null, null)))
+        assertEquals(PackMlSum(240, 0), sumPackMls(listOf(80, 80, 80)))
+        assertEquals(PackMlSum(null, 0), sumPackMls(emptyList()))
+    }
 }

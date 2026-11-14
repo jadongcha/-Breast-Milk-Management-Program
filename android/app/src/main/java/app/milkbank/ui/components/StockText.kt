@@ -36,7 +36,7 @@ fun recordMlTextOf(count: Int, ml: Int?, unknown: Int, f: StockFormats): String 
 }
 
 @Composable
-private fun rememberStockFormats(): StockFormats {
+internal fun rememberStockFormats(): StockFormats {
     val res = LocalContext.current.resources
     return remember(res) {
         StockFormats(

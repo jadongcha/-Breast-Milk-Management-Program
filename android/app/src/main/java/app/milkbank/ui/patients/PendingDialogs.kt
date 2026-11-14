@@ -27,7 +27,9 @@ import app.milkbank.api.PendingDto
 import app.milkbank.core.formatPendingTime
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
-import app.milkbank.ui.components.MlField
+import app.milkbank.ui.components.PackMlFields
+import app.milkbank.ui.components.PackMlsState
+import app.milkbank.ui.components.stockText
 import java.time.Instant
 
 @Composable
@@ -48,7 +50,7 @@ fun ConfirmCountDialog(
     now: Instant,
     onDec: () -> Unit,
     onInc: () -> Unit,
-    onMl: (String) -> Unit,
+    onPackMls: (PackMlsState) -> Unit,
     canConfirm: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -74,7 +76,7 @@ fun ConfirmCountDialog(
                 modifier = MinButton.semantics { contentDescription = increase },
             ) { Text("+", Modifier.clearAndSetSemantics { }) }
         }
-        MlField(state.mlText, onMl, stringResource(R.string.ml_label), Modifier.fillMaxWidth(), enabled = !state.submitting)
+        PackMlFields(state.packMls, onPackMls, 56.dp, Modifier.fillMaxWidth(), enabled = !state.submitting)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onDismiss, enabled = !state.submitting, modifier = Modifier.weight(1f).then(MinButton)) {
                 Text(stringResource(R.string.cancel))
@@ -149,7 +151,7 @@ fun PendingDoneDialog(state: PendingDialog.Done, now: Instant, onClose: () -> Un
             textAlign = TextAlign.Center,
         )
         Text(
-            stringResource(R.string.pending_done_stock, state.balance),
+            stringResource(R.string.pending_done_stock, stockText(state.balance, state.balanceMl, state.unknown)),
             Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,

@@ -6,9 +6,9 @@ import app.milkbank.api.PendingDto
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
 import app.milkbank.data.SubmissionRepository
-import app.milkbank.ui.components.MlParse
-import app.milkbank.ui.components.parseMl
-import app.milkbank.ui.components.valueOrNull
+import app.milkbank.ui.components.PackMlSum
+import app.milkbank.ui.components.PackMlsState
+import app.milkbank.ui.components.sumPackMls
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +28,7 @@ sealed interface PendingDialog {
         val item: PendingDto,
         val count: Int,
         val submitting: Boolean = false,
-        val mlText: String = "",
+        val packMls: PackMlsState = PackMlsState(emptyList()),
     ) : PendingDialog
     data class Reject(
         val item: PendingDto,
@@ -37,9 +37,15 @@ sealed interface PendingDialog {
         val submitting: Boolean = false,
     ) : PendingDialog
 
-    /** [before] is the stock before this intake (balance - received). */
-    data class Done(val item: PendingDto, val received: Int, val balance: Int, val before: Int) : PendingDialog
+    /** [before] is the stock before this intake (balance - received); [balanceMl] and [unknown] describe the new stock. */
+    data class Done(
+        val item: PendingDto, val received: Int, val balance: Int, val before: Int,
+        val balanceMl: Int = 0, val unknown: Int = 0,
+    ) : PendingDialog
 }
+
+/** The guardian's per-pack volumes, one entry per submitted pack (null = not given). */
+fun PendingDto.packSum(): PackMlSum = sumPackMls(List(count) { packMls.getOrNull(it) })
 
 /** Nurse home: guardian submissions waiting for a nurse to confirm the received pack count, or reject. */
 class PendingViewModel(
@@ -102,7 +108,8 @@ class PendingViewModel(
     fun openConfirm(item: PendingDto) {
         if (item.discharged || isBusy()) return
         setError(null)
-        _dialog.value = PendingDialog.Confirm(item, item.count.coerceIn(MIN_COUNT, MAX_COUNT), mlText = item.ml?.toString() ?: "")
+        val count = item.count.coerceIn(MIN_COUNT, MAX_COUNT)
+        _dialog.value = PendingDialog.Confirm(item, count, packMls = PackMlsState.from(item.packMls).resize(count))
     }
 
     fun inc() = adjust(+1)
@@ -111,21 +118,22 @@ class PendingViewModel(
     private fun adjust(delta: Int) {
         val d = _dialog.value as? PendingDialog.Confirm ?: return
         if (d.submitting) return
-        _dialog.value = d.copy(count = (d.count + delta).coerceIn(MIN_COUNT, MAX_COUNT))
+        val count = (d.count + delta).coerceIn(MIN_COUNT, MAX_COUNT)
+        _dialog.value = d.copy(count = count, packMls = d.packMls.resize(count))
     }
 
-    fun setMl(text: String) {
+    fun setPackMls(state: PackMlsState) {
         val d = _dialog.value as? PendingDialog.Confirm ?: return
-        if (!d.submitting) _dialog.value = d.copy(mlText = text)
+        if (!d.submitting) _dialog.value = d.copy(packMls = state)
     }
 
-    fun canConfirm(d: PendingDialog.Confirm): Boolean = !d.submitting && parseMl(d.mlText) != MlParse.Invalid
+    fun canConfirm(d: PendingDialog.Confirm): Boolean =
+        !d.submitting && d.packMls.values != null && !d.packMls.allInvalid
 
     fun confirm() {
         val d = _dialog.value as? PendingDialog.Confirm ?: return
         if (!canConfirm(d)) return
-        // TEMP bridge: Task 3 replaces the total-mL field; until then the guardian's per-pack volumes go through.
-        val packMls = List(d.count) { d.item.packMls.getOrNull(it) }
+        val packMls = d.packMls.values ?: return
         // Set synchronously (before launching) so a second tap can never start a second intake.
         if (d.submitting) return
         _dialog.value = d.copy(submitting = true)
@@ -134,8 +142,10 @@ class PendingViewModel(
                 when (val r = submissions().confirm(d.item.id, d.count, packMls)) {
                     is ApiResult.Ok -> {
                         val balance = r.value.balance
-                        banner.post(ResultBanner(d.item.babyId, "intake_confirm", d.count, balance))
-                        _dialog.value = PendingDialog.Done(d.item, d.count, balance, balance - d.count)
+                        val ml = r.value.balanceMl
+                        val unknown = r.value.unknownMlPacks
+                        banner.post(ResultBanner(d.item.babyId, "intake_confirm", d.count, balance, ml, unknown))
+                        _dialog.value = PendingDialog.Done(d.item, d.count, balance, balance - d.count, ml, unknown)
                         refresh()
                     }
                     is ApiResult.Err -> failed(r.error.status, r.error.message)

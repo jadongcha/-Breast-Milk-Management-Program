@@ -35,9 +35,11 @@ import app.milkbank.api.BabyDto
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
-import app.milkbank.ui.components.MlField
-import app.milkbank.ui.components.MlParse
-import app.milkbank.ui.components.parseMl
+import app.milkbank.ui.components.PackMlFields
+import app.milkbank.ui.components.PackMlsState
+import app.milkbank.ui.components.recordMlText
+import app.milkbank.ui.components.stockText
+import app.milkbank.ui.components.sumPackMls
 
 private val BUTTON_MIN_HEIGHT = 64.dp
 
@@ -105,9 +107,9 @@ private fun GuardianSteps(vm: GuardianViewModel) {
                     GuardianButton(stringResource(R.string.guardian_finish), vm::finish, Modifier.fillMaxWidth(), outlined = true)
                 }
                 is GuardianStep.Stock -> StockStep(s, vm, online)
-                is GuardianStep.PickCount -> PickStep(s.baby, s.mlText, vm)
+                is GuardianStep.PickCount -> PickStep(s.baby, s.count, s.packMls, s.canSubmit, online, vm)
                 is GuardianStep.ConfirmSubmit -> {
-                    PickStep(s.baby, s.ml?.toString() ?: "", vm)
+                    PickStep(s.baby, s.count, s.packMls, canSubmit = false, online = online, vm = vm)
                     ConfirmDialog(s, vm, submitting, online)
                 }
                 is GuardianStep.Done -> DoneStep(s, vm)
@@ -158,9 +160,10 @@ private fun StockStep(s: GuardianStep.Stock, vm: GuardianViewModel, online: Bool
     Text(s.baby.babyId, style = MaterialTheme.typography.titleLarge)
     Text(stringResource(R.string.guardian_confirmed_stock), style = MaterialTheme.typography.titleLarge)
     Text(
-        stringResource(R.string.packs, s.baby.balance),
-        style = MaterialTheme.typography.displayLarge,
+        stockText(s.baby.balance, s.baby.balanceMl, s.baby.unknownMlPacks),
+        style = MaterialTheme.typography.displayMedium,
         color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
     )
     if (s.baby.pendingCount > 0) {
         Text(stringResource(R.string.guardian_pending, s.baby.pendingCount), style = MaterialTheme.typography.titleLarge)
@@ -177,19 +180,22 @@ private fun StockStep(s: GuardianStep.Stock, vm: GuardianViewModel, online: Bool
     }
 }
 
+/** Pick the pack count, fill one volume field per pack (below the buttons), then [제출] opens the confirmation. */
 @Composable
-private fun PickStep(baby: BabyDto, mlText: String, vm: GuardianViewModel) {
+private fun PickStep(
+    baby: BabyDto, count: Int?, packMls: PackMlsState, canSubmit: Boolean, online: Boolean, vm: GuardianViewModel,
+) {
     Title(stringResource(R.string.guardian_count_title))
     Text(baby.babyId, style = MaterialTheme.typography.titleLarge)
-    MlField(mlText, vm::setMl, stringResource(R.string.guardian_ml_label), Modifier.fillMaxWidth(), fieldModifier = Modifier.heightIn(min = 64.dp))
-    val packsEnabled = parseMl(mlText) != MlParse.Invalid
     for (row in listOf(1..5, 6..10)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             for (n in row) {
-                GuardianButton(n.toString(), { vm.pickCount(n) }, Modifier.weight(1f), enabled = packsEnabled)
+                GuardianButton(n.toString(), { vm.pickCount(n) }, Modifier.weight(1f), outlined = n != count)
             }
         }
     }
+    if (count != null) PackMlFields(packMls, vm::setPackMls, BUTTON_MIN_HEIGHT, Modifier.fillMaxWidth())
+    GuardianButton(stringResource(R.string.guardian_submit), vm::toConfirm, Modifier.fillMaxWidth(), enabled = canSubmit && online)
     GuardianButton(stringResource(R.string.back), vm::back, Modifier.fillMaxWidth(), outlined = true)
 }
 
@@ -198,9 +204,9 @@ private fun ConfirmDialog(s: GuardianStep.ConfirmSubmit, vm: GuardianViewModel, 
     IdleAwareDialog(onDismissRequest = vm::back) {
         Surface(shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                val sum = sumPackMls(s.packMls.values.orEmpty())
                 Text(
-                    if (s.ml == null) stringResource(R.string.guardian_submit_confirm, s.baby.babyId, s.count)
-                    else stringResource(R.string.guardian_confirm_with_ml, s.baby.babyId, s.count, s.ml),
+                    stringResource(R.string.guardian_submit_confirm, s.baby.babyId, recordMlText(s.count, sum.ml, sum.unknown)),
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -215,10 +221,15 @@ private fun ConfirmDialog(s: GuardianStep.ConfirmSubmit, vm: GuardianViewModel, 
 @Composable
 private fun DoneStep(s: GuardianStep.Done, vm: GuardianViewModel) {
     Title(stringResource(R.string.guardian_done_title))
-    Text(if (s.ml == null) stringResource(R.string.guardian_done_submitted, s.count)
-        else stringResource(R.string.guardian_done_submitted_ml, s.count, s.ml),
-        style = MaterialTheme.typography.headlineMedium)
-    Text(stringResource(R.string.guardian_done_stock, s.balance), style = MaterialTheme.typography.headlineMedium)
+    val sum = sumPackMls(s.packMls)
+    Text(
+        stringResource(R.string.guardian_done_submitted, recordMlText(s.count, sum.ml, sum.unknown)),
+        style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center,
+    )
+    Text(
+        stringResource(R.string.guardian_done_stock, stockText(s.balance, s.balanceMl, s.unknown)),
+        style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center,
+    )
     Text(
         stringResource(R.string.guardian_done_note, s.count),
         style = MaterialTheme.typography.titleLarge,

@@ -8,6 +8,8 @@ import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.FakeClock
 import app.milkbank.data.SubmissionRepository
+import app.milkbank.ui.components.PackMlSum
+import app.milkbank.ui.components.PackMlsState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -85,34 +87,95 @@ class PendingViewModelTest {
         assertEquals(PendingDialog.Done(pendingDto(1), received = 2, balance = 5, before = 3), v.dialog.value)
     }
 
-    @Test fun openConfirm_prefillsGuardianMl() = runTest {
-        repo.items = listOf(pendingDto(1, ml = 240))
+    @Test fun openConfirm_prefillsGuardianPackMls() = runTest {
+        repo.items = listOf(pendingDto(1, packMls = listOf(80, null, 90)))
         val v = vm(); v.refresh(); advanceUntilIdle()
         v.openConfirm(v.items.value.single())
-        assertEquals("240", (v.dialog.value as PendingDialog.Confirm).mlText)
+        assertEquals(PackMlsState.from(listOf(80, null, 90)), (v.dialog.value as PendingDialog.Confirm).packMls)
     }
 
-    // TEMP (Task 3 replaces): the guardian's per-pack volumes are sent, resized to the confirmed count.
-    @Test fun confirm_sendsGuardianPackMlsResizedToCount() = runTest {
+    @Test fun openConfirm_withoutGuardianVolumes_hasBlankFieldsForCount() = runTest {
+        repo.items = listOf(pendingDto(1, count = 2))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single())
+        assertEquals(PackMlsState.empty(2), (v.dialog.value as PendingDialog.Confirm).packMls)
+    }
+
+    @Test fun confirmCountChange_resizes() = runTest {
+        repo.items = listOf(pendingDto(1, count = 2, packMls = listOf(80, 90)))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single())
+        v.inc()
+        assertEquals(PackMlsState(listOf("80", "90", "")), (v.dialog.value as PendingDialog.Confirm).packMls)
+        v.dec(); v.dec()
+        assertEquals(PackMlsState(listOf("80")), (v.dialog.value as PendingDialog.Confirm).packMls)
+    }
+
+    @Test fun confirm_sendsPackMlsAlways() = runTest {
+        repo.items = listOf(pendingDto(1, count = 2)) // guardian gave no volumes: still sent, as nulls
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single()); v.confirm(); advanceUntilIdle()
+        assertEquals(listOf(listOf<Int?>(null, null)), repo.confirmPackMls)
+    }
+
+    @Test fun confirm_sendsNurseEditedPackMls() = runTest {
+        repo.items = listOf(pendingDto(1, packMls = listOf(80, null, 90)))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single())
+        v.setPackMls((v.dialog.value as PendingDialog.Confirm).packMls.setAt(1, "100").setAt(2, ""))
+        v.confirm(); advanceUntilIdle()
+        assertEquals(listOf(listOf<Int?>(80, 100, null)), repo.confirmPackMls)
+    }
+
+    @Test fun confirm_sendsPackMlsResizedToCount() = runTest {
         repo.items = listOf(pendingDto(1, packMls = listOf(80, null, 90)))
         val v = vm(); v.refresh(); advanceUntilIdle()
         v.openConfirm(v.items.value.single()); v.dec(); v.confirm(); advanceUntilIdle()
         assertEquals(listOf(listOf<Int?>(80, null)), repo.confirmPackMls)
     }
 
-    @Test fun confirm_morePacksThanSubmitted_padsWithUnknown() = runTest {
-        repo.items = listOf(pendingDto(1, count = 2, packMls = listOf(80, 90)))
+    @Test fun confirm_withInvalidPackMl_isBlocked() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
-        v.openConfirm(v.items.value.single()); v.inc(); v.confirm(); advanceUntilIdle()
-        assertEquals(listOf(listOf<Int?>(80, 90, null)), repo.confirmPackMls)
-    }
-
-    @Test fun confirm_withInvalidMl_isBlocked() = runTest {
-        val v = vm(); v.refresh(); advanceUntilIdle()
-        v.openConfirm(v.items.value.single()); v.setMl("0")
+        v.openConfirm(v.items.value.single())
+        v.setPackMls((v.dialog.value as PendingDialog.Confirm).packMls.setAt(0, "0"))
         assertEquals(false, v.canConfirm(v.dialog.value as PendingDialog.Confirm))
         v.confirm(); advanceUntilIdle()
         assertEquals(0, repo.confirmCalls)
+    }
+
+    @Test fun confirm_withInvalidAllField_isBlocked() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single())
+        v.setPackMls((v.dialog.value as PendingDialog.Confirm).packMls.setAll("5000"))
+        assertEquals(false, v.canConfirm(v.dialog.value as PendingDialog.Confirm))
+    }
+
+    @Test fun confirm_bannerAndDoneCarryStockMl() = runTest {
+        repo.confirmHandler = { id, c ->
+            ApiResult.Ok(ConfirmResponse(recordDto(100, count = c), 5, submissionDto(id, "confirmed"), 340, 1))
+        }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single()); v.confirm(); advanceUntilIdle()
+        assertEquals(ResultBanner("DEMO-01", "intake_confirm", 3, 5, 340, 1), banner.last.value)
+        assertEquals(PendingDialog.Done(pendingDto(1), 3, 5, 2, 340, 1), v.dialog.value)
+    }
+
+    @Test fun setPackMls_ignoredWhileSubmitting() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        repo.confirmHandler = { id, c ->
+            gate.await()
+            ApiResult.Ok(ConfirmResponse(recordDto(100, count = c), 5, submissionDto(id, "confirmed")))
+        }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.openConfirm(v.items.value.single()); v.confirm(); advanceUntilIdle()
+        v.setPackMls(PackMlsState(listOf("1", "2", "3")))
+        assertEquals(PackMlsState.empty(3), (v.dialog.value as PendingDialog.Confirm).packMls)
+        gate.complete(Unit); advanceUntilIdle()
+    }
+
+    @Test fun pendingPackSum_usesGuardianVolumesPerPack() {
+        assertEquals(PackMlSum(170, 1), pendingDto(1, count = 3, packMls = listOf(80, null, 90)).packSum())
+        assertEquals(PackMlSum(null, 2), pendingDto(1, count = 2).packSum())
     }
 
     @Test fun confirm_refreshesTableAfterSuccess() = runTest {

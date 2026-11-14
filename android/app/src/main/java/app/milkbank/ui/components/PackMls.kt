@@ -115,3 +115,11 @@ private fun PackMlField(
         }
     }
 }
+
+/** Known volumes added up ([ml] is null when none is known) and how many packs have no volume. */
+data class PackMlSum(val ml: Int?, val unknown: Int)
+
+fun sumPackMls(values: List<Int?>): PackMlSum {
+    val known = values.filterNotNull()
+    return PackMlSum(if (known.isEmpty()) null else known.sum(), values.size - known.size)
+}

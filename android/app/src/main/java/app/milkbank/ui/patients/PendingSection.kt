@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
-import app.milkbank.ui.components.packsWithMl
+import app.milkbank.ui.components.recordMlText
 import app.milkbank.api.PendingDto
 import app.milkbank.core.formatPendingTime
 import app.milkbank.ui.MilkbankColors
@@ -58,7 +58,7 @@ fun PendingSection(viewModel: PendingViewModel, modifier: Modifier = Modifier) {
 
     when (val d = dialog) {
         is PendingDialog.Confirm -> ConfirmCountDialog(
-            d, now, viewModel::dec, viewModel::inc, viewModel::setMl, viewModel.canConfirm(d), viewModel::confirm, viewModel::close,
+            d, now, viewModel::dec, viewModel::inc, viewModel::setPackMls, viewModel.canConfirm(d), viewModel::confirm, viewModel::close,
         )
         is PendingDialog.Reject -> RejectDialog(
             d, now, viewModel.canReject(d), viewModel::setReason, viewModel::setMemo, viewModel::reject, viewModel::close,
@@ -66,6 +66,13 @@ fun PendingSection(viewModel: PendingViewModel, modifier: Modifier = Modifier) {
         is PendingDialog.Done -> PendingDoneDialog(d, now, viewModel::close)
         null -> Unit
     }
+}
+
+/** "3팩 · 240mL" from the guardian's per-pack volumes. */
+@Composable
+private fun submittedText(p: PendingDto): String {
+    val sum = p.packSum()
+    return recordMlText(p.count, sum.ml, sum.unknown)
 }
 
 @Composable
@@ -93,9 +100,9 @@ private fun PendingTable(
             HeaderCell(R.string.pending_col_baby, 1.3f)
             HeaderCell(R.string.pending_col_stock, 0.9f)
             HeaderCell(R.string.pending_col_station, 1.3f)
-            HeaderCell(R.string.pending_col_time, 1.5f)
-            HeaderCell(R.string.pending_col_count, 0.8f)
-            Row(Modifier.weight(2.4f)) {}
+            HeaderCell(R.string.pending_col_time, 1.3f)
+            HeaderCell(R.string.pending_col_count, 1.5f)
+            Row(Modifier.weight(2.2f)) {}
         }
         items.forEach { p ->
             HorizontalDivider()
@@ -103,12 +110,12 @@ private fun PendingTable(
                 Text(p.babyId, Modifier.weight(1.3f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(stringResource(R.string.packs, p.balance), Modifier.weight(0.9f), style = MaterialTheme.typography.bodyLarge)
                 Text(p.stationName, Modifier.weight(1.3f), style = MaterialTheme.typography.bodyLarge)
-                Text(formatPendingTime(p.submittedAt, now), Modifier.weight(1.5f), style = MaterialTheme.typography.bodyLarge)
+                Text(formatPendingTime(p.submittedAt, now), Modifier.weight(1.3f), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    packsWithMl(p.count, p.ml), Modifier.weight(0.8f),
+                    submittedText(p), Modifier.weight(1.5f),
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 )
-                Row(Modifier.weight(2.4f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Row(Modifier.weight(2.2f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     RowButtons(p, onConfirm, onReject)
                 }
             }
@@ -147,7 +154,7 @@ private fun PendingCardRow(
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    stringResource(R.string.pending_label_value, stringResource(R.string.pending_col_count), packsWithMl(p.count, p.ml)),
+                    stringResource(R.string.pending_label_value, stringResource(R.string.pending_col_count), submittedText(p)),
                     Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { RowButtons(p, onConfirm, onReject) }

@@ -37,7 +37,7 @@
     <string name="reject_other">기타</string>
     <string name="reject_memo_label">기타 사유</string>
     <string name="pending_done_received">실제 받은 모유 %1$d팩</string>
-    <string name="pending_done_stock">현재 확인된 냉동 모유 %1$d팩</string>
+    <string name="pending_done_stock">현재 확인된 냉동 모유 %1$s</string>
     <string name="pending_done_formula">기존 %1$d팩 + 확인한 %2$d팩</string>
     <string name="pending_uncertain">처리됐는지 확인하지 못했습니다. 대기 표를 확인해 주세요</string>
     <string name="kind_intake_confirm">입고 확인</string>
@@ -50,7 +50,6 @@
     <string name="packs">%1$d팩</string>
     <string name="packs_ml">%1$d팩 · %2$dmL</string>
     <string name="ml_value">%1$dmL</string>
-    <string name="ml_label">용량(mL) · 선택</string>
     <string name="pack_ml_label">팩 %d (mL)</string>
     <string name="pack_ml_all_label">모두 같은 용량(mL)</string>
     <string name="pack_ml_hint">모르면 비워 두세요</string>
@@ -65,7 +64,6 @@
     <string name="packs_to_go">나갈 팩: %s</string>
     <string name="choose_packs">팩 고르기</string>
     <string name="choose_packs_done">고르기 완료</string>
-    <string name="ml_range_error">용량은 1~20000mL 사이여야 합니다</string>
     <string name="result_banner">%1$s · %2$d팩 %3$s 완료 · 현재 냉동 재고 %4$s</string>
     <string name="remaining_packs">남은 %1$d팩</string>
     <string name="remaining_stock">남은 %1$s</string>
@@ -232,14 +230,11 @@
     <string name="guardian_submit_button">가져온 모유 입력</string>
     <string name="guardian_finish">마치기</string>
     <string name="guardian_count_title">가져온 모유 팩 수를 눌러 주세요</string>
-    <string name="guardian_submit_confirm">%1$s 아기 모유 %2$d팩을 제출합니다</string>
-    <string name="guardian_ml_label">총 용량(mL) · 모르면 비워 두세요</string>
-    <string name="guardian_confirm_with_ml">%1$s 아기 모유 %2$d팩 · %3$dmL를 제출합니다</string>
-    <string name="guardian_done_submitted_ml">방금 제출한 모유 %1$d팩 · %2$dmL</string>
+    <string name="guardian_submit_confirm">%1$s 아기 모유 %2$s을 제출합니다</string>
     <string name="guardian_submit">제출</string>
     <string name="guardian_done_title">제출 접수 완료</string>
-    <string name="guardian_done_submitted">방금 제출한 모유 %1$d팩</string>
-    <string name="guardian_done_stock">현재 확인된 냉동 재고 %1$d팩</string>
+    <string name="guardian_done_submitted">방금 제출한 모유 %1$s</string>
+    <string name="guardian_done_stock">현재 확인된 냉동 재고 %1$s</string>
     <string name="guardian_done_note">제출한 %1$d팩은 간호사 확인 후 재고에 반영됩니다</string>
     <string name="guardian_session_expired">시간이 지나 처음 화면으로 돌아왔습니다. 다시 입력해 주세요</string>
     <string name="guardian_submit_uncertain">제출이 됐는지 확인하지 못했습니다. 재고 화면을 확인해 주세요</string>
