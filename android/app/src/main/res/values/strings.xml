@@ -221,4 +221,13 @@
     <string name="station_release_admin_only">관리자만 해제할 수 있습니다</string>
     <string name="station_release_button">제출처 모드 해제</string>
     <string name="station_release_offline">서버에 연결된 뒤 다시 시도해 주세요</string>
+    <string name="discharge">퇴원 처리</string>
+    <string name="discharge_return">퇴원 반환</string>
+    <string name="discharge_discard">폐기</string>
+    <string name="discharge_confirm">%1$s 아기를 퇴원 처리합니다. 남은 %2$d팩은 %3$s(으)로 기록됩니다. 퇴원하면 입력과 보호자 로그인이 바로 막힙니다.</string>
+    <string name="discharge_confirm_empty">%1$s 아기를 퇴원 처리합니다. 퇴원하면 입력과 보호자 로그인이 바로 막힙니다.</string>
+    <string name="erase_now">개인정보 지금 말소</string>
+    <string name="erase_confirm">되돌릴 수 없습니다. 아기 이름, 등록번호, 보호자 이름·전화번호, 기록 메모를 지웁니다.</string>
+    <string name="erased_badge">말소됨</string>
+    <string name="next">다음</string>
 </resources>

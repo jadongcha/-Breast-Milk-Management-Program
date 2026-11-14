@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -17,6 +18,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -41,6 +46,9 @@ import app.milkbank.R
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
+import app.milkbank.ui.patients.DISCARD_REASONS
+import app.milkbank.ui.patients.DialogShell
+import app.milkbank.ui.patients.reasonLabel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -56,6 +64,12 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
     val submitting by viewModel.submitting.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val erased by viewModel.erased.collectAsStateWithLifecycle()
+    val canDischarge by viewModel.canDischarge.collectAsStateWithLifecycle()
+    val canErase by viewModel.canErase.collectAsStateWithLifecycle()
+    val balance by viewModel.balance.collectAsStateWithLifecycle()
+    val dischargeDialog by viewModel.dischargeDialog.collectAsStateWithLifecycle()
+    val eraseDialog by viewModel.eraseDialog.collectAsStateWithLifecycle()
     val online = LocalOnline.current
     var pickingDate by rememberSaveable { mutableStateOf(false) }
 
@@ -83,8 +97,16 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val enabled = !loading && !submitting
+            val enabled = !loading && !submitting && !erased
             val fieldModifier = Modifier.fillMaxWidth()
+            if (erased) {
+                Text(
+                    stringResource(R.string.erased_badge),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IdleTextField(form.regNo, viewModel::setRegNo, stringResource(R.string.field_reg_no), fieldModifier, enabled = enabled)
             IdleTextField(form.babyName, viewModel::setBabyName, stringResource(R.string.field_baby_name), fieldModifier, enabled = enabled)
             IdleTextField(form.bed, viewModel::setBed, stringResource(R.string.field_bed), fieldModifier, enabled = enabled)
@@ -104,12 +126,39 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
 
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge) }
 
-            Button(
-                onClick = viewModel::submit,
-                enabled = enabled && online,
-                modifier = fieldModifier.then(MinButton),
-            ) { Text(stringResource(R.string.save), style = MaterialTheme.typography.titleLarge) }
+            if (!erased) {
+                Button(
+                    onClick = viewModel::submit,
+                    enabled = enabled && online,
+                    modifier = fieldModifier.then(MinButton),
+                ) { Text(stringResource(R.string.save), style = MaterialTheme.typography.titleLarge) }
+            }
+            if (canDischarge) {
+                OutlinedButton(
+                    onClick = viewModel::openDischarge, enabled = enabled && online,
+                    modifier = fieldModifier.then(MinButton),
+                ) { Text(stringResource(R.string.discharge)) }
+            }
+            if (canErase) {
+                OutlinedButton(
+                    onClick = viewModel::openErase, enabled = enabled && online,
+                    modifier = fieldModifier.then(MinButton),
+                ) { Text(stringResource(R.string.erase_now), color = MaterialTheme.colorScheme.error) }
+            }
         }
+    }
+
+    if (dischargeDialog) {
+        DischargeDialog(
+            regNo = form.regNo, balance = balance, submitting = submitting, online = online,
+            onConfirm = viewModel::discharge, onDismiss = viewModel::closeDischarge,
+        )
+    }
+    if (eraseDialog) {
+        EraseDialog(
+            regNo = form.regNo, submitting = submitting, online = online,
+            onConfirm = viewModel::erase, onDismiss = viewModel::closeErase,
+        )
     }
 
     if (pickingDate) {
@@ -150,5 +199,111 @@ internal fun AdmittedOnPicker(current: String, onPick: (String) -> Unit, onDismi
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BabyIdHeading(regNo: String) {
+    Text(
+        regNo,
+        Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.displaySmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
+private fun ConfirmButtons(submitting: Boolean, online: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {
+            Text(stringResource(R.string.cancel))
+        }
+        Button(onClick = onConfirm, enabled = !submitting && online, modifier = Modifier.weight(1f).then(MinButton)) {
+            Text(stringResource(R.string.confirm))
+        }
+    }
+}
+
+/** Step 1 (only when packs remain): return or discard (with reason). Step 2: the baby ID shown large to confirm. */
+@Composable
+private fun DischargeDialog(
+    regNo: String,
+    balance: Int,
+    submitting: Boolean,
+    online: Boolean,
+    onConfirm: (remaining: String, discardReason: String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var remaining by rememberSaveable { mutableStateOf("return") }
+    var reason by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirming by rememberSaveable { mutableStateOf(balance == 0) }
+    DialogShell(onDismiss, dismissable = !submitting) {
+        BabyIdHeading(regNo)
+        if (!confirming) {
+            for (choice in listOf("return" to R.string.discharge_return, "discard" to R.string.discharge_discard)) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                        .selectable(selected = remaining == choice.first, role = Role.RadioButton, onClick = { remaining = choice.first }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = remaining == choice.first, onClick = null)
+                    Text(stringResource(choice.second), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            if (remaining == "discard") {
+                Text(stringResource(R.string.discard_reason_label), style = MaterialTheme.typography.titleMedium)
+                for (r in DISCARD_REASONS) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .selectable(selected = reason == r, role = Role.RadioButton, onClick = { reason = r }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = reason == r, onClick = null)
+                        Text(reasonLabel(r), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).then(MinButton)) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Button(
+                    onClick = { confirming = true },
+                    enabled = remaining == "return" || reason != null,
+                    modifier = Modifier.weight(1f).then(MinButton),
+                ) { Text(stringResource(R.string.next)) }
+            }
+        } else {
+            val text = if (balance == 0) {
+                stringResource(R.string.discharge_confirm_empty, regNo)
+            } else {
+                val target = stringResource(if (remaining == "discard") R.string.discharge_discard else R.string.discharge_return)
+                stringResource(R.string.discharge_confirm, regNo, balance, target)
+            }
+            Text(text, Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            if (balance > 0 && remaining == "discard") {
+                reason?.let { Text(reasonLabel(it), Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+            }
+            ConfirmButtons(submitting, online, onConfirm = {
+                if (balance == 0) onConfirm("return", null)
+                else onConfirm(remaining, if (remaining == "discard") reason else null)
+            }, onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun EraseDialog(regNo: String, submitting: Boolean, online: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    DialogShell(onDismiss, dismissable = !submitting) {
+        BabyIdHeading(regNo)
+        Text(
+            stringResource(R.string.erase_confirm),
+            Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+        )
+        ConfirmButtons(submitting, online, onConfirm, onDismiss)
     }
 }

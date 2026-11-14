@@ -5,6 +5,7 @@ import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.FakeClock
 import app.milkbank.ui.patients.FakePatientRepository
+import app.milkbank.ui.patients.ResultBanner
 import app.milkbank.ui.patients.ResultBannerStore
 import app.milkbank.ui.patients.detailDto
 import app.milkbank.ui.patients.patientDto
@@ -28,6 +29,7 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class PatientFormViewModelTest {
     private val repo = FakePatientRepository()
+    private val admin = FakeAdminRepository()
     private val banner = ResultBannerStore()
 
     // 2026-11-10 16:00 UTC is already 2026-11-11 in Seoul.
@@ -36,7 +38,7 @@ class PatientFormViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(StandardTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm(id: Int? = null) = PatientFormViewModel(id, { repo }, banner, clock, "서버에 연결할 수 없습니다")
+    private fun vm(id: Int? = null) = PatientFormViewModel(id, { repo }, { admin }, banner, clock, "서버에 연결할 수 없습니다")
 
     private fun PatientFormViewModel.fill() {
         setRegNo("DEMO-9"); setBabyName("김아기"); setBed("4"); setGuardianName("박보호"); setGuardianPhone("01012345678")
@@ -135,5 +137,116 @@ class PatientFormViewModelTest {
         v.submit(); advanceUntilIdle()
         assertEquals("서버에 연결할 수 없습니다", v.error.value)
         assertFalse(v.submitting.value)
+    }
+
+    private fun loaded(
+        status: String = "admitted", balance: Int = 5, erasedAt: String? = null,
+    ) {
+        repo.detailHandler = { ApiResult.Ok(detailDto(it, "DEMO-1", balance).copy(status = status, erasedAt = erasedAt)) }
+    }
+
+    @Test fun discharge_return_callsRepository_postsBannerAndSignalsSaved() = runTest {
+        loaded(balance = 4)
+        admin.dischargeHandler = { id, _, _ -> ApiResult.Ok(patientDto(id, "DEMO-1")) }
+        val v = vm(7); advanceUntilIdle()
+        v.discharge("return", null); advanceUntilIdle()
+        assertEquals(listOf(Triple(7, "return", null as String?)), admin.discharges)
+        assertTrue(v.saved.value)
+        assertEquals(ResultBanner("DEMO-1", "discharge_return", 4, 0), banner.last.value)
+        assertFalse(v.submitting.value)
+    }
+
+    @Test fun discharge_discard_sendsReason() = runTest {
+        loaded()
+        admin.dischargeHandler = { id, _, _ -> ApiResult.Ok(patientDto(id, "DEMO-1")) }
+        val v = vm(7); advanceUntilIdle()
+        v.discharge("discard", "contaminated"); advanceUntilIdle()
+        assertEquals(listOf(Triple(7, "discard", "contaminated" as String?)), admin.discharges)
+        assertEquals("discard", banner.last.value?.kind)
+    }
+
+    @Test fun discharge_discardNeedsReason() = runTest {
+        loaded()
+        val v = vm(7); advanceUntilIdle()
+        v.discharge("discard", null); advanceUntilIdle()
+        assertEquals(0, admin.discharges.size)
+        assertFalse(v.saved.value)
+    }
+
+    @Test fun discharge_whenAlreadyDischarged_isIgnored() = runTest {
+        loaded(status = "discharged")
+        val v = vm(7); advanceUntilIdle()
+        v.discharge("return", null); advanceUntilIdle()
+        assertEquals(0, admin.discharges.size)
+    }
+
+    @Test fun discharge_serverConflict_showsMessage_andClosesDialog() = runTest {
+        loaded()
+        admin.dischargeHandler = { _, _, _ -> ApiResult.Err(ApiError(409, "이미 퇴원한 환자입니다")) }
+        val v = vm(7); advanceUntilIdle()
+        v.openDischarge()
+        v.discharge("return", null); advanceUntilIdle()
+        assertEquals("이미 퇴원한 환자입니다", v.error.value)
+        assertFalse(v.saved.value)
+        assertFalse(v.dischargeDialog.value)
+        assertNull(banner.last.value)
+    }
+
+    @Test fun dialogs_openAndClose_onlyWhenAllowed() = runTest {
+        loaded()
+        val v = vm(7); advanceUntilIdle()
+        v.openDischarge(); assertTrue(v.dischargeDialog.value)
+        v.closeDischarge(); assertFalse(v.dischargeDialog.value)
+        v.openErase() // admitted: not allowed
+        assertFalse(v.eraseDialog.value)
+    }
+
+    @Test fun erase_onlyWhenDischarged() = runTest {
+        loaded(status = "admitted")
+        val v = vm(7); advanceUntilIdle()
+        v.erase(); advanceUntilIdle()
+        assertEquals(0, admin.erases.size)
+        assertFalse(v.saved.value)
+    }
+
+    @Test fun erase_whenDischarged_callsRepositoryAndSignalsSaved() = runTest {
+        loaded(status = "discharged", balance = 0)
+        admin.eraseHandler = { id -> ApiResult.Ok(patientDto(id, "DEMO-1")) }
+        val v = vm(7); advanceUntilIdle()
+        v.openErase(); assertTrue(v.eraseDialog.value)
+        v.erase(); advanceUntilIdle()
+        assertEquals(listOf(7), admin.erases)
+        assertTrue(v.saved.value)
+        assertFalse(v.eraseDialog.value)
+        assertEquals(1L, banner.changes.value)
+    }
+
+    @Test fun erase_serverConflict_showsMessage() = runTest {
+        loaded(status = "discharged")
+        admin.eraseHandler = { ApiResult.Err(ApiError(409, "이미 말소된 환자입니다")) }
+        val v = vm(7); advanceUntilIdle()
+        v.erase(); advanceUntilIdle()
+        assertEquals("이미 말소된 환자입니다", v.error.value)
+        assertFalse(v.saved.value)
+    }
+
+    @Test fun erasedPatient_isReadOnly() = runTest {
+        loaded(status = "discharged", erasedAt = "2026-11-10T00:00:00Z")
+        val v = vm(7); advanceUntilIdle()
+        assertTrue(v.erased.value)
+        v.setBed("9")
+        v.submit(); advanceUntilIdle()
+        v.erase(); advanceUntilIdle()
+        assertEquals(0, repo.updatedForms.size)
+        assertEquals(0, admin.erases.size)
+        assertFalse(v.saved.value)
+    }
+
+    @Test fun admittedPatient_isNotErased() = runTest {
+        loaded()
+        val v = vm(7); advanceUntilIdle()
+        assertFalse(v.erased.value)
+        assertTrue(v.canDischarge.value)
+        assertFalse(v.canErase.value)
     }
 }

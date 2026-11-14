@@ -122,7 +122,7 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 factory = viewModelFactory {
                     initializer {
                         PatientFormViewModel(
-                            id, { container.patients }, container.resultBanner, SystemClock, unexpected,
+                            id, { container.patients }, { container.admin }, container.resultBanner, SystemClock, unexpected,
                             logUnexpected("patient form failed"),
                         )
                     }

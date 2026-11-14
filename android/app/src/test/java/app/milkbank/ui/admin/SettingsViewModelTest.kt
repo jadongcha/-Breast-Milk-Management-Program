@@ -47,8 +47,16 @@ class FakeAdminRepository : AdminRepository {
     override suspend fun daily(date: String?): ApiResult<DailyDto> = unsupported
     override suspend fun series(days: Int, patientId: Int?): ApiResult<List<SeriesPointDto>> = unsupported
     override suspend fun exportCsv(from: String, to: String): ApiResult<ByteArray> = unsupported
-    override suspend fun discharge(id: Int, remaining: String, discardReason: String?): ApiResult<PatientDto> = unsupported
-    override suspend fun erase(id: Int): ApiResult<PatientDto> = unsupported
+    var dischargeHandler: suspend (Int, String, String?) -> ApiResult<PatientDto> = { _, _, _ -> unsupported }
+    var eraseHandler: suspend (Int) -> ApiResult<PatientDto> = { unsupported }
+    val discharges = mutableListOf<Triple<Int, String, String?>>()
+    val erases = mutableListOf<Int>()
+    override suspend fun discharge(id: Int, remaining: String, discardReason: String?): ApiResult<PatientDto> {
+        discharges += Triple(id, remaining, discardReason); return dischargeHandler(id, remaining, discardReason)
+    }
+    override suspend fun erase(id: Int): ApiResult<PatientDto> {
+        erases += id; return eraseHandler(id)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

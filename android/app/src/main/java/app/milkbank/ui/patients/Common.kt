@@ -39,6 +39,7 @@ fun kindLabel(kind: String): String = stringResource(
         "use" -> R.string.kind_use
         "discard" -> R.string.kind_discard
         "return" -> R.string.kind_return
+        "discharge_return" -> R.string.discharge_return
         else -> R.string.kind_cancel
     },
 )

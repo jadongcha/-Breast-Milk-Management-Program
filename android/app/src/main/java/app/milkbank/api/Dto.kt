@@ -141,6 +141,8 @@ data class PatientDetailDto(
     val status: String,
     @SerialName("admitted_on") val admittedOn: String,
     @SerialName("discharged_on") val dischargedOn: String? = null,
+    /** Set once the personal data was erased; null otherwise. */
+    @SerialName("erased_at") val erasedAt: String? = null,
     @SerialName("alert_enabled") val alertEnabled: Boolean,
     @SerialName("days_threshold") val daysThreshold: Int? = null,
     @SerialName("packs_threshold") val packsThreshold: Int? = null,

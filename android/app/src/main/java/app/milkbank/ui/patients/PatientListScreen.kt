@@ -166,6 +166,14 @@ private fun BabyRow(p: PatientDto, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(p.regNo, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (p.erasedAt != null) {
+                Text(
+                    stringResource(R.string.erased_badge),
+                    Modifier.padding(end = 12.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 stringResource(R.string.remaining_packs, p.balance),
                 style = MaterialTheme.typography.titleMedium,
