@@ -71,3 +71,11 @@ def test_login_and_me_expose_idle(client, app):
     assert r.json()["staff_idle_minutes"] == 10
     r = client.get("/auth/me", headers=auth(r.json()["token"]))
     assert r.json()["staff_idle_minutes"] == 10
+
+
+def test_settings_patch_rejects_json_bool_and_string(client, admin_token):
+    for body in ({"retention_days": True}, {"avg_days": "5"}):
+        r = client.patch("/admin/settings", json=body, headers=auth(admin_token))
+        assert r.status_code == 422, r.text
+    r = client.get("/admin/settings", headers=auth(admin_token))
+    assert r.json() == DEFAULTS

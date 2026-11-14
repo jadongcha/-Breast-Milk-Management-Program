@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from .models import (
     DiscardReason,
@@ -38,11 +38,11 @@ class SettingsOut(BaseModel):
 
 
 class SettingsPatch(BaseModel):
-    days_threshold: int | None = None
-    packs_threshold: int | None = None
-    avg_days: int | None = None
-    staff_idle_minutes: int | None = None
-    retention_days: int | None = None
+    days_threshold: StrictInt | None = None
+    packs_threshold: StrictInt | None = None
+    avg_days: StrictInt | None = None
+    staff_idle_minutes: StrictInt | None = None
+    retention_days: StrictInt | None = None
 
 
 class LoginIn(BaseModel):
