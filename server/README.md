@@ -65,7 +65,7 @@
 - 제출처 기기: `GET /station/self`, `DELETE /station/self`(관리자 토큰 + 제출처 토큰. 앱에서 제출처 모드를 해제할 때 부른다)
 - 보호자: `POST /guardian/login`, `GET /guardian/babies`, `POST /guardian/submissions`, `POST /guardian/logout`
 - 간호사: `GET /submissions?status=pending`(확인 대기 목록), `POST /submissions/{id}/confirm`(실제 팩 수로 확인), `POST /submissions/{id}/reject`(반려: `not_received` 또는 `other`+메모)
-- 제출처 기기는 모든 `/guardian/*` 요청에 헤더 `X-Station-Token`을 보내고, 보호자 로그인 뒤에는 `Authorization: Bearer <보호자 토큰>`도 보낸다. 보호자는 그 제출처 기기에서만 로그인할 수 있다.
+- 제출처 기기는 모든 `/guardian/*` 요청에 헤더 `X-Station-Token`을 보내고, 보호자 로그인 뒤에는 `Authorization: Bearer <보호자 토큰>`도 보낸다. 제출처 태블릿은 제출처 토큰을 쓰고, 보호자는 서버에 등록된 병원 기기라면 어디서든 로그인할 수 있다(2-4단계).
 - 보호자 세션은 마지막 요청 뒤 1분이 지나면 끝난다.
 - 제출처 토큰은 선택이다(2-4단계). 헤더 없이 로그인하면 일반 병원 기기 세션이 되고(`station_id`가 비어 있다), 그 세션은 제출처 토큰 없이만 쓸 수 있다. 제출처 세션은 같은 제출처 토큰으로만 쓸 수 있고, 어긋나면 401 "로그인이 필요합니다"이다. 헤더가 있는데 무효이면 401 `station_invalid`이다.
 - 일반 기기 잠금: 같은 접속 IP에서 10분 안에 20번 실패하면 그 IP의 토큰 없는 로그인이 10분 동안 잠긴다(429). 제출처 토큰으로 하는 로그인에는 영향이 없다. 전화번호 잠금은 그대로다.
