@@ -38,6 +38,9 @@ import app.milkbank.core.formatKst
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
+import app.milkbank.ui.components.MlField
+import app.milkbank.ui.components.MlParse
+import app.milkbank.ui.components.parseMl
 
 internal val MinButton = Modifier.heightIn(min = 56.dp)
 
@@ -93,20 +96,23 @@ private fun DialogButtons(
 }
 
 @Composable
-fun IntakeDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit) {
+fun IntakeDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String, ml: String) -> Unit) {
     var count by rememberSaveable { mutableStateOf<Int?>(null) }
+    var ml by rememberSaveable { mutableStateOf("") }
     var memo by rememberSaveable { mutableStateOf("") }
     DialogShell(onDismiss) {
         Text(stringResource(R.string.kind_intake), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         CountPicker(count) { count = it }
+        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
         IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_intake), count != null, onDismiss) { count?.let { onNext(it, memo) } }
+        DialogButtons(stringResource(R.string.kind_intake), count != null && parseMl(ml) != MlParse.Invalid, onDismiss) { count?.let { onNext(it, memo, ml) } }
     }
 }
 
 @Composable
-fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit) {
+fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String, ml: String) -> Unit) {
     var count by rememberSaveable { mutableIntStateOf(1) }
+    var ml by rememberSaveable { mutableStateOf("") }
     var memo by rememberSaveable { mutableStateOf("") }
     DialogShell(onDismiss) {
         Text(stringResource(R.string.kind_use), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -123,19 +129,22 @@ fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String) -> Unit)
                 modifier = MinButton.semantics { contentDescription = increase },
             ) { Text("+", Modifier.clearAndSetSemantics { }) }
         }
+        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
         IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_use), true, onDismiss) { onNext(count, memo) }
+        DialogButtons(stringResource(R.string.kind_use), parseMl(ml) != MlParse.Invalid, onDismiss) { onNext(count, memo, ml) }
     }
 }
 
 @Composable
-fun DiscardDialog(onDismiss: () -> Unit, onNext: (count: Int, reason: String, memo: String) -> Unit) {
+fun DiscardDialog(onDismiss: () -> Unit, onNext: (count: Int, reason: String, memo: String, ml: String) -> Unit) {
     var count by rememberSaveable { mutableStateOf<Int?>(null) }
+    var ml by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf<String?>(null) }
     var memo by rememberSaveable { mutableStateOf("") }
     DialogShell(onDismiss) {
         Text(stringResource(R.string.kind_discard), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         CountPicker(count) { count = it }
+        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
         Text(stringResource(R.string.discard_reason_label), style = MaterialTheme.typography.titleMedium)
         for (r in DISCARD_REASONS) {
             Row(
@@ -148,10 +157,10 @@ fun DiscardDialog(onDismiss: () -> Unit, onNext: (count: Int, reason: String, me
             }
         }
         IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_discard), count != null && reason != null, onDismiss) {
+        DialogButtons(stringResource(R.string.kind_discard), count != null && reason != null && parseMl(ml) != MlParse.Invalid, onDismiss) {
             val c = count
             val r = reason
-            if (c != null && r != null) onNext(c, r, memo)
+            if (c != null && r != null) onNext(c, r, memo, ml)
         }
     }
 }
@@ -181,6 +190,7 @@ fun ConfirmStockDialog(
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
         )
+        action.ml?.let { Text(stringResource(R.string.ml_value, it), Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center) }
         action.reason?.let { Text(reasonLabel(it), Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {

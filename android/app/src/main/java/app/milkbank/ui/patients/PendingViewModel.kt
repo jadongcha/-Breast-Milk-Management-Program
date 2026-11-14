@@ -6,6 +6,9 @@ import app.milkbank.api.PendingDto
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
 import app.milkbank.data.SubmissionRepository
+import app.milkbank.ui.components.MlParse
+import app.milkbank.ui.components.parseMl
+import app.milkbank.ui.components.valueOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +24,12 @@ private const val MIN_COUNT = 1
 private const val MAX_COUNT = 100
 
 sealed interface PendingDialog {
-    data class Confirm(val item: PendingDto, val count: Int, val submitting: Boolean = false) : PendingDialog
+    data class Confirm(
+        val item: PendingDto,
+        val count: Int,
+        val submitting: Boolean = false,
+        val mlText: String = "",
+    ) : PendingDialog
     data class Reject(
         val item: PendingDto,
         val reason: String? = null,
@@ -94,7 +102,7 @@ class PendingViewModel(
     fun openConfirm(item: PendingDto) {
         if (item.discharged || isBusy()) return
         setError(null)
-        _dialog.value = PendingDialog.Confirm(item, item.count.coerceIn(MIN_COUNT, MAX_COUNT))
+        _dialog.value = PendingDialog.Confirm(item, item.count.coerceIn(MIN_COUNT, MAX_COUNT), mlText = item.ml?.toString() ?: "")
     }
 
     fun inc() = adjust(+1)
@@ -106,14 +114,24 @@ class PendingViewModel(
         _dialog.value = d.copy(count = (d.count + delta).coerceIn(MIN_COUNT, MAX_COUNT))
     }
 
+    fun setMl(text: String) {
+        val d = _dialog.value as? PendingDialog.Confirm ?: return
+        if (!d.submitting) _dialog.value = d.copy(mlText = text)
+    }
+
+    fun canConfirm(d: PendingDialog.Confirm): Boolean = !d.submitting && parseMl(d.mlText) != MlParse.Invalid
+
     fun confirm() {
         val d = _dialog.value as? PendingDialog.Confirm ?: return
+        if (!canConfirm(d)) return
+        // Empty clears the volume (null is always sent), so a guardian's value the nurse erased stays erased.
+        val ml = parseMl(d.mlText).valueOrNull()
         // Set synchronously (before launching) so a second tap can never start a second intake.
         if (d.submitting) return
         _dialog.value = d.copy(submitting = true)
         viewModelScope.launch {
             try {
-                when (val r = submissions().confirm(d.item.id, d.count)) {
+                when (val r = submissions().confirm(d.item.id, d.count, ml)) {
                     is ApiResult.Ok -> {
                         val balance = r.value.balance
                         banner.post(ResultBanner(d.item.babyId, "intake_confirm", d.count, balance))

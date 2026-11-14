@@ -143,12 +143,12 @@ class RepositoriesTest {
             MockResponse().setResponseCode(201).setBody("""{"record":$r0,"balance":4}""")
                 .addHeader("Content-Type", "application/json"),
         )
-        val r = HttpStockRepository(api, net).add(2, "discard", 2, "contaminated", "m") as ApiResult.Ok
+        val r = HttpStockRepository(api, net).add(2, "discard", 2, "contaminated", "m", 240) as ApiResult.Ok
         assertEquals(4, r.value.balance)
         val req = server.takeRequest()
         assertEquals("/patients/2/records", req.path)
         val b = req.body.readUtf8()
-        assertTrue(b, b.contains("\"discard_reason\":\"contaminated\"") && b.contains("\"kind\":\"discard\""))
+        assertTrue(b, b.contains("\"discard_reason\":\"contaminated\"") && b.contains("\"kind\":\"discard\"") && b.contains("\"ml\":240"))
     }
 
     private fun gatedServer(latch: java.util.concurrent.CountDownLatch, response: () -> MockResponse) {

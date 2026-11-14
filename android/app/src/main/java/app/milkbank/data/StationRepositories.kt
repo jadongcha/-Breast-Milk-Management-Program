@@ -53,7 +53,7 @@ interface GuardianRepository {
 
 interface SubmissionRepository {
     suspend fun pending(): ApiResult<List<PendingDto>>
-    suspend fun confirm(id: Int, count: Int): ApiResult<ConfirmResponse>
+    suspend fun confirm(id: Int, count: Int, ml: Int?): ApiResult<ConfirmResponse>
     suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse>
 }
 
@@ -102,8 +102,8 @@ class HttpGuardianRepository(
 class HttpSubmissionRepository(private val api: MilkbankApi?, private val networkError: String) :
     SubmissionRepository {
     override suspend fun pending() = api.call(networkError) { it.submissions("pending") }
-    override suspend fun confirm(id: Int, count: Int) =
-        api.call(networkError) { it.confirmSubmission(id, ConfirmRequest(count)) }
+    override suspend fun confirm(id: Int, count: Int, ml: Int?) =
+        api.call(networkError) { it.confirmSubmission(id, ConfirmRequest(count, ml)) }
 
     override suspend fun reject(id: Int, reason: String, memo: String?) =
         api.call(networkError) { it.rejectSubmission(id, RejectRequest(reason, memo)) }

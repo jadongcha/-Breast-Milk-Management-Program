@@ -96,13 +96,13 @@ class FakePatients(private val world: FakeWorld) : PatientRepository {
 
 class FakeStock(private val world: FakeWorld) : StockRepository {
     override suspend fun add(
-        patientId: Int, kind: String, count: Int, reason: String?, memo: String?,
+        patientId: Int, kind: String, count: Int, reason: String?, memo: String?, ml: Int?,
     ): ApiResult<RecordResultDto> {
         val serverKind = if (kind == "intake") "in" else kind
         world.balance += if (kind == "intake") count else -count
         val record = RecordDto(
             id = world.records.size + 1, kind = serverKind, count = count, staffId = fakeNurse.id,
-            staffName = fakeNurse.name, createdAt = Instant.now(), canceled = false,
+            staffName = fakeNurse.name, createdAt = Instant.now(), canceled = false, ml = ml,
         )
         world.records += record
         return ApiResult.Ok(RecordResultDto(record, world.balance))
@@ -172,7 +172,7 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
 
 class FakeSubmissions : SubmissionRepository {
     override suspend fun pending(): ApiResult<List<PendingDto>> = ApiResult.Ok(emptyList())
-    override suspend fun confirm(id: Int, count: Int): ApiResult<ConfirmResponse> = ApiResult.Err(unsupported)
+    override suspend fun confirm(id: Int, count: Int, ml: Int?): ApiResult<ConfirmResponse> = ApiResult.Err(unsupported)
     override suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse> =
         ApiResult.Err(unsupported)
 }

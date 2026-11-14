@@ -118,6 +118,7 @@ data class RecordDto(
     @SerialName("discard_reason") val discardReason: String? = null,
     @SerialName("target_id") val targetId: Int? = null,
     val memo: String? = null,
+    val ml: Int? = null,
     @SerialName("staff_id") val staffId: Int,
     @SerialName("staff_name") val staffName: String,
     @SerialName("created_at")
@@ -151,6 +152,7 @@ data class RecordRequest(
     val count: Int,
     @SerialName("discard_reason") val discardReason: String? = null,
     val memo: String? = null,
+    val ml: Int? = null,
 )
 
 @Serializable
@@ -226,6 +228,7 @@ data class PendingDto(
     val submittedAt: Instant,
     val count: Int,
     val discharged: Boolean,
+    val ml: Int? = null,
 )
 
 /** status is "pending", "confirmed" or "rejected". */
@@ -245,10 +248,13 @@ data class SubmissionDto(
     val handledAt: Instant? = null,
     @SerialName("reject_reason") val rejectReason: String? = null,
     val memo: String? = null,
+    val ml: Int? = null,
+    @SerialName("confirmed_ml") val confirmedMl: Int? = null,
 )
 
+/** [ml] has no default on purpose: it is always sent (null clears it; omitting it keeps the guardian's value). */
 @Serializable
-data class ConfirmRequest(val count: Int)
+data class ConfirmRequest(val count: Int, val ml: Int?)
 
 @Serializable
 data class ConfirmResponse(val record: RecordDto, val balance: Int, val submission: SubmissionDto)

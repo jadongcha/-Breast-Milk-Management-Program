@@ -48,6 +48,10 @@
     <string name="detail_title">%1$s 모유 재고 상세</string>
     <string name="confirmed_stock">확정 냉동 재고</string>
     <string name="packs">%1$d팩</string>
+    <string name="packs_ml">%1$d팩 · %2$dmL</string>
+    <string name="ml_value">%1$dmL</string>
+    <string name="ml_label">용량(mL) · 선택</string>
+    <string name="ml_range_error">용량은 1~20000mL 사이여야 합니다</string>
     <string name="result_banner">%1$s · %2$d팩 %3$s 완료 · 현재 냉동 재고 %4$d팩</string>
     <string name="remaining_packs">남은 %1$d팩</string>
     <string name="no_match">일치하는 아기가 없습니다</string>

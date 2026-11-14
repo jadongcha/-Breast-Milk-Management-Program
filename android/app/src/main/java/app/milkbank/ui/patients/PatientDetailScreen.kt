@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
+import app.milkbank.ui.components.packsWithMl
 import app.milkbank.api.RecordDto
 import app.milkbank.core.formatKst
 import app.milkbank.ui.LocalOnline
@@ -137,17 +138,17 @@ fun PatientDetailScreen(
     }
 
     when (dialog) {
-        "intake" -> IntakeDialog(onDismiss = { dialog = null }) { c, m ->
+        "intake" -> IntakeDialog(onDismiss = { dialog = null }) { c, m, ml ->
             dialog = null
-            viewModel.request("intake", c, null, m)
+            viewModel.request("intake", c, null, m, ml)
         }
-        "use" -> UseDialog(onDismiss = { dialog = null }) { c, m ->
+        "use" -> UseDialog(onDismiss = { dialog = null }) { c, m, ml ->
             dialog = null
-            viewModel.request("use", c, null, m)
+            viewModel.request("use", c, null, m, ml)
         }
-        "discard" -> DiscardDialog(onDismiss = { dialog = null }) { c, r, m ->
+        "discard" -> DiscardDialog(onDismiss = { dialog = null }) { c, r, m, ml ->
             dialog = null
-            viewModel.request("discard", c, r, m)
+            viewModel.request("discard", c, r, m, ml)
         }
     }
     val regNo = detail?.regNo
@@ -183,7 +184,7 @@ private fun RecordRow(r: RecordDto, canCancel: Boolean, enabled: Boolean, onCanc
         Column(Modifier.weight(1f).alpha(if (r.canceled) 0.5f else 1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(formatKst(r.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val head = buildString {
-                append(kindLabel(r.kind)); append(' '); append(stringResource(R.string.packs, r.count))
+                append(kindLabel(r.kind)); append(' '); append(packsWithMl(r.count, r.ml))
             }
             Text(head, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             r.discardReason?.let { Text(reasonLabel(it)) }

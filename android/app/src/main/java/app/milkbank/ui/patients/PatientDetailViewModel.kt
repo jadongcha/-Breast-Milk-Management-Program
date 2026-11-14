@@ -11,6 +11,9 @@ import app.milkbank.core.Clock
 import app.milkbank.data.PatientRepository
 import app.milkbank.data.StockRepository
 import app.milkbank.session.SessionManager
+import app.milkbank.ui.components.MlParse
+import app.milkbank.ui.components.parseMl
+import app.milkbank.ui.components.valueOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** kind is "intake", "use" or "discard"; reason is required for "discard". */
-data class PendingAction(val kind: String, val count: Int, val reason: String?, val memo: String?)
+data class PendingAction(val kind: String, val count: Int, val reason: String?, val memo: String?, val ml: Int? = null)
 
 val DISCARD_REASONS = listOf("thawed_leftover", "contaminated", "other")
 private val STOCK_KINDS = setOf("intake", "use", "discard")
@@ -92,15 +95,18 @@ class PatientDetailViewModel(
     }
 
     /** Opens the confirmation. Ignored while a save is in flight or when the input is invalid. */
-    fun request(kind: String, count: Int, reason: String?, memo: String?) {
+    fun request(kind: String, count: Int, reason: String?, memo: String?, mlText: String = "") {
         if (_submitting.value) return
         if (kind !in STOCK_KINDS || count !in 1..MAX_PACKS) return
         if (kind == "discard" && reason !in DISCARD_REASONS) return
+        val ml = parseMl(mlText)
+        if (ml == MlParse.Invalid) return
         _error.value = null
         _pending.value = PendingAction(
             kind, count,
             if (kind == "discard") reason else null,
             memo?.trim()?.ifEmpty { null },
+            ml.valueOrNull(),
         )
     }
 
@@ -115,7 +121,7 @@ class PatientDetailViewModel(
         val regNo = _detail.value?.regNo
         viewModelScope.launch {
             try {
-                when (val r = stockRepo().add(patientId, p.kind, p.count, p.reason, p.memo)) {
+                when (val r = stockRepo().add(patientId, p.kind, p.count, p.reason, p.memo, p.ml)) {
                     is ApiResult.Ok -> {
                         applyResult(r.value)
                         _message.value = savedMessage

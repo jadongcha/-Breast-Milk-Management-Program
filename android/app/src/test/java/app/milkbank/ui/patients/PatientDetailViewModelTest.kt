@@ -48,6 +48,28 @@ class PatientDetailViewModelTest {
             saveUncertainMessage = "저장이 됐는지 확인하지 못했습니다",
         )
 
+    @Test fun intake_withMl_savesIt() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.request("intake", 3, null, null, "240")
+        v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<Int?>(240), stock.addMls)
+    }
+
+    @Test fun intake_withoutMl_savesNull() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.request("intake", 3, null, null, " ")
+        v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<Int?>(null), stock.addMls)
+    }
+
+    @Test fun request_withInvalidMl_doesNotOpenOrSave() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.request("intake", 3, null, null, "0")
+        assertNull(v.pending.value)
+        v.confirm(); advanceUntilIdle()
+        assertEquals(0, stock.addCalls)
+    }
+
     @Test fun intake_success_updatesBalanceRecordsSavedAndBanner() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
         v.request("intake", 3, null, null)

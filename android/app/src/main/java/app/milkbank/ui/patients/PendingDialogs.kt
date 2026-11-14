@@ -27,6 +27,7 @@ import app.milkbank.api.PendingDto
 import app.milkbank.core.formatPendingTime
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
+import app.milkbank.ui.components.MlField
 import java.time.Instant
 
 @Composable
@@ -47,6 +48,8 @@ fun ConfirmCountDialog(
     now: Instant,
     onDec: () -> Unit,
     onInc: () -> Unit,
+    onMl: (String) -> Unit,
+    canConfirm: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -71,13 +74,14 @@ fun ConfirmCountDialog(
                 modifier = MinButton.semantics { contentDescription = increase },
             ) { Text("+", Modifier.clearAndSetSemantics { }) }
         }
+        MlField(state.mlText, onMl, stringResource(R.string.ml_label), Modifier.fillMaxWidth(), enabled = !state.submitting)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onDismiss, enabled = !state.submitting, modifier = Modifier.weight(1f).then(MinButton)) {
                 Text(stringResource(R.string.cancel))
             }
             Button(
                 onClick = onConfirm,
-                enabled = !state.submitting && LocalOnline.current,
+                enabled = canConfirm && LocalOnline.current,
                 modifier = Modifier.weight(1f).then(MinButton),
             ) { Text(stringResource(R.string.pending_confirm)) }
         }
