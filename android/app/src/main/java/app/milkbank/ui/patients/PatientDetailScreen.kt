@@ -21,10 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,9 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
-import app.milkbank.ui.components.packsWithMl
+import app.milkbank.ui.components.recordMlText
+import app.milkbank.ui.components.stockText
 import app.milkbank.api.RecordDto
 import app.milkbank.core.formatKst
+import app.milkbank.core.formatKstDay
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.MilkbankColors
 
@@ -54,7 +53,7 @@ fun PatientDetailScreen(
     val pendingCancel by viewModel.pendingCancel.collectAsStateWithLifecycle()
     val submitting by viewModel.submitting.collectAsStateWithLifecycle()
     val online = LocalOnline.current
-    var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    val dialog by viewModel.dialog.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -100,11 +99,24 @@ fun PatientDetailScreen(
                     Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.confirmed_stock), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            stringResource(R.string.packs, d.balance),
-                            fontSize = 56.sp,
+                            stockText(d.balance, d.balanceMl, d.unknownMlPacks),
+                            fontSize = 40.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (d.balance == 0) MilkbankColors.Error else MilkbankColors.Primary,
                         )
+                    }
+                }
+
+                if (d.packs.isNotEmpty()) {
+                    Text(stringResource(R.string.remaining_packs_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    MilkCard {
+                        d.packs.forEach { pk ->
+                            Text(
+                                stringResource(R.string.remaining_pack_line, formatKstDay(pk.createdAt), packMlLabel(pk.ml)),
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
                     }
                 }
 
@@ -116,15 +128,15 @@ fun PatientDetailScreen(
                     )
                 } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
-                        onClick = { dialog = "intake" }, enabled = canSave,
+                        onClick = { viewModel.openDialog("intake") }, enabled = canSave,
                         modifier = Modifier.weight(1f).heightIn(min = 64.dp),
                     ) { Text(stringResource(R.string.kind_intake), style = MaterialTheme.typography.titleLarge) }
                     SecondaryButton(
                         stringResource(R.string.kind_use), canSave, Modifier.weight(1f),
-                    ) { dialog = "use" }
+                    ) { viewModel.openDialog("use") }
                     SecondaryButton(
                         stringResource(R.string.kind_discard), canSave, Modifier.weight(1f),
-                    ) { dialog = "discard" }
+                    ) { viewModel.openDialog("discard") }
                 }
 
                 Text(stringResource(R.string.records_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -142,20 +154,8 @@ fun PatientDetailScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
 
-    when (dialog) {
-        "intake" -> IntakeDialog(onDismiss = { dialog = null }) { c, m, ml ->
-            dialog = null
-            viewModel.request("intake", c, null, m, ml)
-        }
-        "use" -> UseDialog(onDismiss = { dialog = null }) { c, m, ml ->
-            dialog = null
-            viewModel.request("use", c, null, m, ml)
-        }
-        "discard" -> DiscardDialog(onDismiss = { dialog = null }) { c, r, m, ml ->
-            dialog = null
-            viewModel.request("discard", c, r, m, ml)
-        }
-    }
+    val openDialog = dialog
+    if (openDialog != null) StockDialog(openDialog, detail?.packs.orEmpty(), viewModel)
     val regNo = detail?.regNo
     val p = pending
     if (p != null && regNo != null) {
@@ -189,7 +189,7 @@ private fun RecordRow(r: RecordDto, canCancel: Boolean, enabled: Boolean, onCanc
         Column(Modifier.weight(1f).alpha(if (r.canceled) 0.5f else 1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(formatKst(r.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val head = buildString {
-                append(kindLabel(r.kind)); append(' '); append(packsWithMl(r.count, r.ml))
+                append(kindLabel(r.kind)); append(' '); append(recordMlText(r.count, r.ml, r.mlUnknown))
             }
             Text(head, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             r.discardReason?.let { Text(reasonLabel(it)) }

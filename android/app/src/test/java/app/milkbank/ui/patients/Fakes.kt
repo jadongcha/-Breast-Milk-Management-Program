@@ -1,5 +1,6 @@
 package app.milkbank.ui.patients
 
+import app.milkbank.api.PackDto
 import app.milkbank.api.PatientDetailDto
 import app.milkbank.api.PatientDto
 import app.milkbank.api.PatientForm
@@ -10,9 +11,10 @@ import app.milkbank.data.PatientRepository
 import app.milkbank.data.StockRepository
 import java.time.Instant
 
-fun patientDto(id: Int, regNo: String, balance: Int = 0) = PatientDto(
+fun patientDto(id: Int, regNo: String, balance: Int = 0, balanceMl: Int = 0, unknownMlPacks: Int = 0) = PatientDto(
     id = id, regNo = regNo, babyName = "이름$id", bed = "$id", guardianName = "보호자", guardianPhone = "010",
     status = "admitted", admittedOn = "2026-11-01", alertEnabled = false, balance = balance,
+    balanceMl = balanceMl, unknownMlPacks = unknownMlPacks,
 )
 
 fun recordDto(
@@ -28,10 +30,13 @@ fun recordDto(
     createdAt = createdAt, canceled = canceled,
 )
 
-fun detailDto(id: Int = 7, regNo: String = "DEMO-1", balance: Int = 5, records: List<RecordDto> = emptyList()) =
+fun detailDto(
+    id: Int = 7, regNo: String = "DEMO-1", balance: Int = 5, records: List<RecordDto> = emptyList(),
+    packs: List<PackDto> = emptyList(),
+) =
     PatientDetailDto(
         id = id, regNo = regNo, babyName = "비밀이름", bed = "3", guardianName = "보호자", guardianPhone = "010-1",
-        status = "admitted", admittedOn = "2026-11-01", alertEnabled = false, balance = balance, records = records,
+        status = "admitted", admittedOn = "2026-11-01", alertEnabled = false, balance = balance, records = records, packs = packs,
     )
 
 class FakePatientRepository : PatientRepository {

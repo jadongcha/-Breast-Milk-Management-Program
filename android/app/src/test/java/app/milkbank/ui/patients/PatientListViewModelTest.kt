@@ -104,6 +104,20 @@ class PatientListViewModelTest {
         assertEquals(before + 1, repo.listCalls)
     }
 
+    @Test fun savedResult_carriesVolumeFields() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        banner.post(ResultBanner("DEMO-1", "intake", 3, 8, 640, 2)); advanceUntilIdle()
+        assertEquals(640, v.lastResult.value!!.balanceMl)
+        assertEquals(2, v.lastResult.value!!.unknown)
+    }
+
+    @Test fun listRows_keepVolumeFields() = runTest {
+        repo.listHandler = { ApiResult.Ok(listOf(patientDto(1, "DEMO-1", 4, balanceMl = 340, unknownMlPacks = 1))) }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        assertEquals(340, v.patients.value.first().balanceMl)
+        assertEquals(1, v.patients.value.first().unknownMlPacks)
+    }
+
     @Test fun expanded_toggles() = runTest {
         val v = vm()
         assertFalse(v.expanded.value)

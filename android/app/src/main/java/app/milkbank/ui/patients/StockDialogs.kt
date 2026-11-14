@@ -16,11 +16,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -38,9 +33,12 @@ import app.milkbank.core.formatKst
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
-import app.milkbank.ui.components.MlField
-import app.milkbank.ui.components.MlParse
-import app.milkbank.ui.components.parseMl
+import app.milkbank.api.PackDto
+import app.milkbank.core.formatKstDay
+import app.milkbank.ui.components.PackMlFields
+import app.milkbank.ui.components.recordMlText
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
 
 internal val MinButton = Modifier.heightIn(min = 56.dp)
 
@@ -95,73 +93,107 @@ private fun DialogButtons(
     }
 }
 
+/** The intake, use or discard window; while "팩 고르기" is open it shows the pack list instead. */
 @Composable
-fun IntakeDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String, ml: String) -> Unit) {
-    var count by rememberSaveable { mutableStateOf<Int?>(null) }
-    var ml by rememberSaveable { mutableStateOf("") }
-    var memo by rememberSaveable { mutableStateOf("") }
-    DialogShell(onDismiss) {
-        Text(stringResource(R.string.kind_intake), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        CountPicker(count) { count = it }
-        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
-        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_intake), count != null && parseMl(ml) != MlParse.Invalid, onDismiss) { count?.let { onNext(it, memo, ml) } }
+fun StockDialog(state: StockDialogState, packs: List<PackDto>, vm: PatientDetailViewModel) {
+    if (state.choosing) ChoosePacksDialog(state, packs, vm)
+    else when (state.kind) {
+        "intake" -> IntakeDialog(state, vm)
+        "use" -> UseDialog(state, vm)
+        else -> DiscardDialog(state, vm)
     }
 }
 
 @Composable
-fun UseDialog(onDismiss: () -> Unit, onNext: (count: Int, memo: String, ml: String) -> Unit) {
-    var count by rememberSaveable { mutableIntStateOf(1) }
-    var ml by rememberSaveable { mutableStateOf("") }
-    var memo by rememberSaveable { mutableStateOf("") }
-    DialogShell(onDismiss) {
+private fun IntakeDialog(state: StockDialogState, vm: PatientDetailViewModel) {
+    DialogShell(vm::closeDialog) {
+        Text(stringResource(R.string.kind_intake), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        CountPicker(state.count, vm::setCount)
+        if (state.count != null) PackMlFields(state.packMls, vm::setPackMls, 56.dp, Modifier.fillMaxWidth())
+        IdleTextField(state.memo, vm::setMemo, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_intake), state.canSubmit, vm::closeDialog, vm::submitDialog)
+    }
+}
+
+@Composable
+private fun UseDialog(state: StockDialogState, vm: PatientDetailViewModel) {
+    val count = state.count ?: 1
+    DialogShell(vm::closeDialog) {
         Text(stringResource(R.string.kind_use), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             val decrease = stringResource(R.string.decrease_pack)
             OutlinedButton(
-                onClick = { if (count > 1) count-- }, enabled = count > 1,
+                onClick = { if (count > 1) vm.setCount(count - 1) }, enabled = count > 1,
                 modifier = MinButton.semantics { contentDescription = decrease },
             ) { Text("−", Modifier.clearAndSetSemantics { }) }
             Text(stringResource(R.string.packs, count), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             val increase = stringResource(R.string.increase_pack)
             OutlinedButton(
-                onClick = { if (count < MAX_PACKS) count++ }, enabled = count < MAX_PACKS,
+                onClick = { if (count < MAX_PACKS) vm.setCount(count + 1) }, enabled = count < MAX_PACKS,
                 modifier = MinButton.semantics { contentDescription = increase },
             ) { Text("+", Modifier.clearAndSetSemantics { }) }
         }
-        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
-        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_use), parseMl(ml) != MlParse.Invalid, onDismiss) { onNext(count, memo, ml) }
+        PacksToGo(state, vm)
+        IdleTextField(state.memo, vm::setMemo, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_use), state.canSubmit, vm::closeDialog, vm::submitDialog)
     }
 }
 
 @Composable
-fun DiscardDialog(onDismiss: () -> Unit, onNext: (count: Int, reason: String, memo: String, ml: String) -> Unit) {
-    var count by rememberSaveable { mutableStateOf<Int?>(null) }
-    var ml by rememberSaveable { mutableStateOf("") }
-    var reason by rememberSaveable { mutableStateOf<String?>(null) }
-    var memo by rememberSaveable { mutableStateOf("") }
-    DialogShell(onDismiss) {
+private fun DiscardDialog(state: StockDialogState, vm: PatientDetailViewModel) {
+    DialogShell(vm::closeDialog) {
         Text(stringResource(R.string.kind_discard), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        CountPicker(count) { count = it }
-        MlField(ml, { ml = it }, stringResource(R.string.ml_label), Modifier.fillMaxWidth())
+        CountPicker(state.count, vm::setCount)
+        if (state.count != null) PacksToGo(state, vm)
         Text(stringResource(R.string.discard_reason_label), style = MaterialTheme.typography.titleMedium)
         for (r in DISCARD_REASONS) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                    .selectable(selected = reason == r, role = Role.RadioButton, onClick = { reason = r }),
+                    .selectable(selected = state.reason == r, role = Role.RadioButton, onClick = { vm.setReason(r) }),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RadioButton(selected = reason == r, onClick = null)
+                RadioButton(selected = state.reason == r, onClick = null)
                 Text(reasonLabel(r), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
             }
         }
-        IdleTextField(memo, { memo = it }, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
-        DialogButtons(stringResource(R.string.kind_discard), count != null && reason != null && parseMl(ml) != MlParse.Invalid, onDismiss) {
-            val c = count
-            val r = reason
-            if (c != null && r != null) onNext(c, r, memo, ml)
+        IdleTextField(state.memo, vm::setMemo, stringResource(R.string.memo_label), Modifier.fillMaxWidth(), singleLine = false)
+        DialogButtons(stringResource(R.string.kind_discard), state.canSubmit, vm::closeDialog, vm::submitDialog)
+    }
+}
+
+/** "나갈 팩: 80mL, 80mL" with the button to pick other packs. */
+@Composable
+private fun PacksToGo(state: StockDialogState, vm: PatientDetailViewModel) {
+    if (state.previewPacks.isNotEmpty()) {
+        Text(stringResource(R.string.packs_to_go, packMlsLabel(state.previewPacks)), style = MaterialTheme.typography.titleMedium)
+    }
+    OutlinedButton(onClick = vm::openChoosePacks, modifier = Modifier.fillMaxWidth().then(MinButton)) {
+        Text(stringResource(R.string.choose_packs))
+    }
+}
+
+/** The remaining packs, oldest first; tick exactly as many as the pack count. */
+@Composable
+private fun ChoosePacksDialog(state: StockDialogState, packs: List<PackDto>, vm: PatientDetailViewModel) {
+    val picking = state.picking.orEmpty()
+    DialogShell(vm::closeDialog) {
+        Text(stringResource(R.string.choose_packs), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.packs, state.count ?: 0), style = MaterialTheme.typography.titleMedium)
+        packs.forEach { pk ->
+            val checked = pk.id in picking
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    .toggleable(value = checked, role = Role.Checkbox, onValueChange = { vm.togglePack(pk.id) }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = checked, onCheckedChange = null)
+                Text(
+                    stringResource(R.string.remaining_pack_line, formatKstDay(pk.createdAt), packMlLabel(pk.ml)),
+                    Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge,
+                )
+            }
         }
+        DialogButtons(stringResource(R.string.choose_packs_done), picking.size == state.count, vm::closeDialog, vm::finishChoosePacks)
     }
 }
 
@@ -190,7 +222,19 @@ fun ConfirmStockDialog(
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
         )
-        action.ml?.let { Text(stringResource(R.string.ml_value, it), Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center) }
+        action.packMls?.let { mls ->
+            val known = mls.filterNotNull()
+            Text(
+                recordMlText(action.count, if (known.isEmpty()) null else known.sum(), mls.size - known.size),
+                Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
+            )
+        }
+        if (action.goingPacks.isNotEmpty()) {
+            Text(
+                stringResource(R.string.packs_to_go, packMlsLabel(action.goingPacks)),
+                Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
+            )
+        }
         action.reason?.let { Text(reasonLabel(it), Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onDismiss, enabled = !submitting, modifier = Modifier.weight(1f).then(MinButton)) {

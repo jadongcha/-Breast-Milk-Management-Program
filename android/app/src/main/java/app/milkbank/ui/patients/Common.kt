@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.milkbank.R
+import app.milkbank.api.PackDto
 
 /** Spec 3.8 card: 12dp corners, thin border, no shadow. */
 @Composable
@@ -52,3 +53,12 @@ fun reasonLabel(reason: String): String = stringResource(
         else -> R.string.reason_other
     },
 )
+
+/** "80mL", or "용량 모름" when the pack has no known volume. */
+@Composable
+fun packMlLabel(ml: Int?): String =
+    if (ml == null) stringResource(R.string.pack_ml_unknown) else stringResource(R.string.ml_value, ml)
+
+/** "80mL, 80mL" for the "나갈 팩" line. */
+@Composable
+fun packMlsLabel(packs: List<PackDto>): String = packs.map { packMlLabel(it.ml) }.joinToString(", ")

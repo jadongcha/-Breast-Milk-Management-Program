@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.milkbank.R
+import app.milkbank.ui.components.stockText
 import app.milkbank.api.PatientDto
 import app.milkbank.ui.MilkbankColors
 import app.milkbank.ui.components.IdleTextField
@@ -104,7 +105,7 @@ fun PatientListContent(
                             .padding(16.dp),
                     ) {
                         Text(
-                            stringResource(R.string.result_banner, b.regNo, b.count, kindLabel(b.kind), b.balance),
+                            stringResource(R.string.result_banner, b.regNo, b.count, kindLabel(b.kind), stockText(b.balance, b.balanceMl, b.unknown)),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MilkbankColors.Primary,
@@ -200,7 +201,7 @@ private fun BabyRow(p: PatientDto, onClick: () -> Unit) {
                 )
             }
             Text(
-                stringResource(R.string.remaining_packs, p.balance),
+                stringResource(R.string.remaining_stock, stockText(p.balance, p.balanceMl, p.unknownMlPacks)),
                 style = MaterialTheme.typography.titleMedium,
                 color = if (p.balance == 0) MilkbankColors.Error else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (p.balance == 0) FontWeight.Bold else FontWeight.Normal,

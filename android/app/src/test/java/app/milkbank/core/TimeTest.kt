@@ -54,4 +54,10 @@ class TimeTest {
             TimeZone.setDefault(saved)
         }
     }
+
+    @Test
+    fun formatKstDay_isSeoulDayNotUtc() {
+        assertEquals("11월 11일", formatKstDay(Instant.parse("2026-11-10T15:30:00Z")))
+        assertEquals("11월 10일", formatKstDay(Instant.parse("2026-11-10T14:59:00Z")))
+    }
 }

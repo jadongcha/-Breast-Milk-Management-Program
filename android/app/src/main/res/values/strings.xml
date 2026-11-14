@@ -66,8 +66,9 @@
     <string name="choose_packs">팩 고르기</string>
     <string name="choose_packs_done">고르기 완료</string>
     <string name="ml_range_error">용량은 1~20000mL 사이여야 합니다</string>
-    <string name="result_banner">%1$s · %2$d팩 %3$s 완료 · 현재 냉동 재고 %4$d팩</string>
+    <string name="result_banner">%1$s · %2$d팩 %3$s 완료 · 현재 냉동 재고 %4$s</string>
     <string name="remaining_packs">남은 %1$d팩</string>
+    <string name="remaining_stock">남은 %1$s</string>
     <string name="no_match">일치하는 아기가 없습니다</string>
     <string name="show_section">펼치기</string>
     <string name="hide_section">접기</string>

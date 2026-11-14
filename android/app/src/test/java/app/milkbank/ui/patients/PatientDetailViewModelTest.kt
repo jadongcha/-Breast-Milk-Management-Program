@@ -1,5 +1,6 @@
 package app.milkbank.ui.patients
 
+import app.milkbank.api.PackDto
 import app.milkbank.api.RecordResultDto
 import app.milkbank.api.StaffDto
 import app.milkbank.core.ApiError
@@ -48,21 +49,196 @@ class PatientDetailViewModelTest {
             saveUncertainMessage = "저장이 됐는지 확인하지 못했습니다",
         )
 
-    // TEMP (Task 2 replaces): the old total-mL field is not sent any more; the server then treats every pack as unknown.
-    @Test fun intake_sendsNoPackVolumesYet() = runTest {
-        val v = vm(); v.refresh(); advanceUntilIdle()
-        v.request("intake", 3, null, null, "240")
+    private val t = Instant.parse("2026-11-10T00:00:00Z")
+    private val packs = listOf(PackDto(1, 80, t), PackDto(2, 80, t), PackDto(3, null, t), PackDto(4, 100, t))
+
+    private fun vmWithPacks(): PatientDetailViewModel {
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 4, packs = packs).copy(balanceMl = 260, unknownMlPacks = 1)) }
+        return vm()
+    }
+
+    @Test fun detail_keepsRemainingPacksAndVolumes() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        assertEquals(listOf(1, 2, 3, 4), v.detail.value!!.packs.map { it.id })
+        assertEquals(260, v.detail.value!!.balanceMl)
+        assertEquals(1, v.detail.value!!.unknownMlPacks)
+    }
+
+    @Test fun intake_sendsPackMls() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("intake"); v.setCount(3)
+        v.setPackMls(v.dialog.value!!.packMls.setAt(0, "80").setAt(1, "80"))
+        v.submitDialog()
+        assertEquals(listOf<Int?>(80, 80, null), v.pending.value!!.packMls)
+        assertNull(v.dialog.value)
         v.confirm(); advanceUntilIdle()
-        assertEquals(listOf<List<Int?>?>(null), stock.addPackMls)
+        assertEquals(listOf<List<Int?>?>(listOf(80, 80, null)), stock.addPackMls)
         assertEquals(listOf<List<Int>?>(null), stock.addPackIds)
     }
 
-    @Test fun request_withInvalidMl_doesNotOpenOrSave() = runTest {
-        val v = vm(); v.refresh(); advanceUntilIdle()
-        v.request("intake", 3, null, null, "0")
+    @Test fun intake_sameVolumeForAll_fillsEveryPack() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("intake"); v.setCount(2)
+        v.setPackMls(v.dialog.value!!.packMls.setAll("90"))
+        v.submitDialog(); v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<List<Int?>?>(listOf(90, 90)), stock.addPackMls)
+    }
+
+    @Test fun intake_invalidBlocksSave() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("intake"); v.setCount(2)
+        v.setPackMls(v.dialog.value!!.packMls.setAt(1, "0"))
+        assertFalse(v.dialog.value!!.canSubmit)
+        v.submitDialog()
         assertNull(v.pending.value)
-        v.confirm(); advanceUntilIdle()
+        assertEquals("intake", v.dialog.value!!.kind) // stays open
+        v.setPackMls(v.dialog.value!!.packMls.setAt(1, "").setAll("abc")) // an invalid "all" field blocks too
+        assertFalse(v.dialog.value!!.canSubmit)
+        v.submitDialog()
+        assertNull(v.pending.value)
         assertEquals(0, stock.addCalls)
+    }
+
+    @Test fun intake_needsCount() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("intake")
+        assertFalse(v.dialog.value!!.canSubmit)
+        v.submitDialog()
+        assertNull(v.pending.value)
+    }
+
+    @Test fun intakeCountChange_resizesFields() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("intake"); v.setCount(3)
+        v.setPackMls(v.dialog.value!!.packMls.setAt(0, "80"))
+        v.setCount(2)
+        assertEquals(listOf("80", ""), v.dialog.value!!.packMls.texts)
+        v.setCount(4)
+        assertEquals(listOf("80", "", "", ""), v.dialog.value!!.packMls.texts)
+    }
+
+    @Test fun use_previewIsOldestPacks() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use")
+        assertEquals(listOf(1), v.dialog.value!!.previewPacks.map { it.id })
+        v.setCount(3)
+        assertEquals(listOf(1, 2, 3), v.dialog.value!!.previewPacks.map { it.id })
+        assertNull(v.dialog.value!!.chosenPackIds)
+    }
+
+    @Test fun choosePacks_requiresExactCount() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(2)
+        v.openChoosePacks()
+        assertTrue(v.dialog.value!!.choosing)
+        v.togglePack(3)
+        v.finishChoosePacks() // 1 of 2: not enough
+        assertTrue(v.dialog.value!!.choosing)
+        assertNull(v.dialog.value!!.chosenPackIds)
+        v.togglePack(4); v.togglePack(1) // a third pick is ignored
+        assertEquals(2, v.dialog.value!!.picking!!.size)
+        v.finishChoosePacks()
+        assertFalse(v.dialog.value!!.choosing)
+        assertEquals(listOf(3, 4), v.dialog.value!!.chosenPackIds)
+        assertEquals(listOf(3, 4), v.dialog.value!!.previewPacks.map { it.id })
+    }
+
+    @Test fun choosePacks_untickingFreesASlot() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(1)
+        v.openChoosePacks(); v.togglePack(2); v.togglePack(2); v.togglePack(4)
+        v.finishChoosePacks()
+        assertEquals(listOf(4), v.dialog.value!!.chosenPackIds)
+    }
+
+    @Test fun choosePacks_sendsPackIds() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(2)
+        v.openChoosePacks(); v.togglePack(4); v.togglePack(3); v.finishChoosePacks()
+        v.submitDialog()
+        assertEquals(listOf(3, 4), v.pending.value!!.packIds)
+        v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<List<Int>?>(listOf(3, 4)), stock.addPackIds)
+        assertEquals(listOf<List<Int?>?>(null), stock.addPackMls)
+    }
+
+    @Test fun choosePacks_countChangeForgetsTheChoice() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(2)
+        v.openChoosePacks(); v.togglePack(3); v.togglePack(4); v.finishChoosePacks()
+        v.setCount(3)
+        assertNull(v.dialog.value!!.chosenPackIds)
+        assertEquals(listOf(1, 2, 3), v.dialog.value!!.previewPacks.map { it.id })
+    }
+
+    @Test fun use_withoutChoosing_sendsNullPackIds() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(2)
+        v.submitDialog(); v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<List<Int>?>(null), stock.addPackIds)
+        assertEquals(listOf<List<Int?>?>(null), stock.addPackMls)
+    }
+
+    @Test fun use_confirmationListsThePacksThatLeave() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(2)
+        v.submitDialog()
+        assertEquals(listOf(1, 2), v.pending.value!!.goingPacks.map { it.id })
+    }
+
+    @Test fun discard_needsReason_andCanChoosePacks() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("discard"); v.setCount(1)
+        assertFalse(v.dialog.value!!.canSubmit)
+        v.setReason("contaminated")
+        v.openChoosePacks(); v.togglePack(2); v.finishChoosePacks()
+        v.submitDialog()
+        assertEquals("contaminated", v.pending.value!!.reason)
+        v.confirm(); advanceUntilIdle()
+        assertEquals(listOf<List<Int>?>(listOf(2)), stock.addPackIds)
+    }
+
+    @Test fun openChoosePacks_ignoredWithoutCountOrOnIntake() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("discard")
+        v.openChoosePacks()
+        assertFalse(v.dialog.value!!.choosing) // no count yet
+        v.openDialog("intake"); v.setCount(2); v.openChoosePacks()
+        assertFalse(v.dialog.value!!.choosing)
+    }
+
+    @Test fun conflictOnChosenPacks_showsServerMessage() = runTest {
+        stock.addHandler = { _, _, _, _, _ -> ApiResult.Err(ApiError(409, "고른 팩을 다시 확인해 주세요")) }
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.setCount(1)
+        v.openChoosePacks(); v.togglePack(3); v.finishChoosePacks()
+        v.submitDialog(); v.confirm(); advanceUntilIdle()
+        assertEquals("고른 팩을 다시 확인해 주세요", v.error.value)
+    }
+
+    @Test fun success_carriesMlToDetailAndBanner_andReloadsPacks() = runTest {
+        stock.addHandler = { _, _, c, _, _ -> ApiResult.Ok(RecordResultDto(recordDto(100, count = c), 6, balanceMl = 420, unknownMlPacks = 2)) }
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        patients.detailHandler = { ApiResult.Ok(detailDto(7, "DEMO-1", 6, packs = packs + PackDto(5, 80, t) + PackDto(6, 80, t))) }
+        v.openDialog("intake"); v.setCount(2); v.submitDialog(); v.confirm(); advanceUntilIdle()
+        assertEquals(420, v.detail.value!!.balanceMl)
+        assertEquals(2, v.detail.value!!.unknownMlPacks)
+        assertEquals(6, v.detail.value!!.packs.size) // new packs fetched after the write
+        assertEquals(ResultBanner("DEMO-1", "intake", 2, 6, 420, 2), banner.last.value)
+    }
+
+    @Test fun cancel_updatesBannerMl() = runTest {
+        stock.cancelHandler = { id -> ApiResult.Ok(RecordResultDto(recordDto(101, kind = "cancel", targetId = id), 2, balanceMl = 160, unknownMlPacks = 1)) }
+        banner.post(ResultBanner("DEMO-1", "intake", 3, 8, 640, 0))
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.cancelRecord(50); advanceUntilIdle()
+        assertEquals(ResultBanner("DEMO-1", "intake", 3, 2, 160, 1), banner.last.value)
+    }
+
+    @Test fun closeDialog_clears() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("use"); v.closeDialog()
+        assertNull(v.dialog.value)
     }
 
     @Test fun intake_success_updatesBalanceRecordsSavedAndBanner() = runTest {

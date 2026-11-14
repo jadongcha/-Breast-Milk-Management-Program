@@ -15,6 +15,12 @@ fun todayKst(now: Instant): LocalDate = now.atZone(SEOUL).toLocalDate()
 /** Formats in Asia/Seoul regardless of the device default time zone. */
 fun formatKst(instant: Instant): String = KST_FORMAT.format(instant)
 
+/** "11월 10일" in Asia/Seoul, for the day a pack came in. */
+fun formatKstDay(instant: Instant): String {
+    val d = instant.atZone(SEOUL)
+    return "${d.monthValue}월 ${d.dayOfMonth}일"
+}
+
 /**
  * Intake time on the pending table: "오후 2시 13분" for today (Asia/Seoul), "11월 10일 오후 2시 13분" otherwise.
  * Hour is 1-12 and minutes are not zero-padded. Independent of the device time zone.
