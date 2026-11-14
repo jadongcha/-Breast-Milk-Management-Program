@@ -126,4 +126,24 @@ class LoginViewModelTest {
         v.onNavigated()
         assertNull(v.state.value.next)
     }
+
+    @Test fun clear_whenIdle_resetsFields() = runTest {
+        val v = vm()
+        v.clear()
+        assertEquals(LoginState(), v.state.value)
+    }
+
+    @Test fun clear_whileLoading_doesNothing() = runTest {
+        val gate = CompletableDeferred<ApiResult<LoginResponse>>()
+        auth.loginHandler = { _, _ -> gate.await() }
+        val v = vm()
+        v.submit(); advanceUntilIdle()
+        assertTrue(v.state.value.loading)
+        v.clear()
+        assertTrue(v.state.value.loading)
+        assertEquals("nurse1", v.state.value.username)
+        assertEquals("pw", v.state.value.password)
+        gate.complete(ApiResult.Ok(LoginResponse("tok", true, staffDto(false))))
+        advanceUntilIdle()
+    }
 }

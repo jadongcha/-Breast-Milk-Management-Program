@@ -119,6 +119,7 @@ fun LoginScreen(
             ) {
                 TextButton(
                     onClick = { viewModel.clear(); staffChosen = false },
+                    enabled = !state.loading,
                     modifier = Modifier.heightIn(min = 56.dp),
                 ) { Text(stringResource(R.string.login_back_to_choice)) }
                 Text(
