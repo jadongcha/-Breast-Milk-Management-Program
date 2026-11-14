@@ -182,6 +182,7 @@ class GuardianViewModel(
         val cur = _step.value as? GuardianStep.PickCount ?: return
         idle.arm()
         _step.value = cur.copy(packMls = state)
+        keepAliveInBackground() // the server's 60 s session counts requests, not typing
     }
 
     /** A pack button: the fields follow the count. Nothing is submitted until [toConfirm]. */

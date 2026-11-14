@@ -364,6 +364,27 @@ class GuardianViewModelTest {
         assertTrue(vm.step.value is GuardianStep.Done)
     }
 
+    @Test fun typingVolumesAfter30s_keepsServerSessionAlive() {
+        val vm = vm()
+        login(vm)
+        val calls = mutableListOf<String>()
+        repo.babiesHandler = { calls += "babies"; ApiResult.Ok(listOf(b1)) }
+        repo.submitHandler = { calls += "submit"; okSubmit }
+        vm.startSubmit()
+        vm.pickCount(2) // 0 s: no ping
+        clock.advance(Duration.ofSeconds(25)); idle.touch()
+        vm.setPackMls(pick(vm).packMls.setAt(0, "80")) // 25 s: still fresh
+        assertEquals(emptyList<String>(), calls)
+        clock.advance(Duration.ofSeconds(10)); idle.touch()
+        vm.setPackMls(pick(vm).packMls.setAt(1, "90")) // 35 s since the last request: ping
+        assertEquals(listOf("babies"), calls)
+        clock.advance(Duration.ofSeconds(40)); idle.touch()
+        vm.setPackMls(pick(vm).packMls.setAt(1, "95")) // 40 s after the ping: ping again
+        assertEquals(listOf("babies", "babies"), calls)
+        vm.toConfirm(); vm.submit()
+        assertTrue(vm.step.value is GuardianStep.Done)
+    }
+
     @Test fun submitStraightAfter40s_pingsOnceThenSubmits() {
         val vm = vm()
         login(vm)
