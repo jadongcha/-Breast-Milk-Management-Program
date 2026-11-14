@@ -26,8 +26,8 @@ import java.time.Instant
 
 private val T0 = Instant.parse("2026-11-12T05:00:00Z")
 
-private fun pendingDto(id: Int, count: Int = 3, balance: Int = 3, discharged: Boolean = false, ml: Int? = null) =
-    PendingDto(id, 7, "DEMO-01", balance, "NICU 앞", T0, count, discharged, ml)
+private fun pendingDto(id: Int, count: Int = 3, balance: Int = 3, discharged: Boolean = false, ml: Int? = null, packMls: List<Int?> = emptyList()) =
+    PendingDto(id, 7, "DEMO-01", balance, "NICU 앞", T0, count, discharged, ml, packMls)
 
 private fun submissionDto(id: Int, status: String) = SubmissionDto(id, 7, 3, T0, status)
 
@@ -41,13 +41,13 @@ class FakeSubmissionRepository : SubmissionRepository {
         { id, _, _ -> ApiResult.Ok(RejectResponse(submissionDto(id, "rejected"))) }
     var pendingCalls = 0
     var confirmCalls = 0
-    val confirmMls = mutableListOf<Int?>()
+    val confirmPackMls = mutableListOf<List<Int?>>()
     val rejects = mutableListOf<Triple<Int, String, String?>>()
 
     override suspend fun pending(): ApiResult<List<PendingDto>> { pendingCalls++; return pendingHandler() }
-    override suspend fun confirm(id: Int, count: Int, ml: Int?): ApiResult<ConfirmResponse> {
+    override suspend fun confirm(id: Int, count: Int, packMls: List<Int?>): ApiResult<ConfirmResponse> {
         confirmCalls++
-        confirmMls += ml
+        confirmPackMls += packMls
         return confirmHandler(id, count)
     }
     override suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse> {
@@ -92,18 +92,19 @@ class PendingViewModelTest {
         assertEquals("240", (v.dialog.value as PendingDialog.Confirm).mlText)
     }
 
-    @Test fun confirm_withClearedMl_sendsNull() = runTest {
-        repo.items = listOf(pendingDto(1, ml = 240))
+    // TEMP (Task 3 replaces): the guardian's per-pack volumes are sent, resized to the confirmed count.
+    @Test fun confirm_sendsGuardianPackMlsResizedToCount() = runTest {
+        repo.items = listOf(pendingDto(1, packMls = listOf(80, null, 90)))
         val v = vm(); v.refresh(); advanceUntilIdle()
-        v.openConfirm(v.items.value.single()); v.setMl(""); v.confirm(); advanceUntilIdle()
-        assertEquals(listOf<Int?>(null), repo.confirmMls)
+        v.openConfirm(v.items.value.single()); v.dec(); v.confirm(); advanceUntilIdle()
+        assertEquals(listOf(listOf<Int?>(80, null)), repo.confirmPackMls)
     }
 
-    @Test fun confirm_withEditedMl_sendsIt() = runTest {
-        repo.items = listOf(pendingDto(1, ml = 240))
+    @Test fun confirm_morePacksThanSubmitted_padsWithUnknown() = runTest {
+        repo.items = listOf(pendingDto(1, count = 2, packMls = listOf(80, 90)))
         val v = vm(); v.refresh(); advanceUntilIdle()
-        v.openConfirm(v.items.value.single()); v.setMl("200"); v.confirm(); advanceUntilIdle()
-        assertEquals(listOf<Int?>(200), repo.confirmMls)
+        v.openConfirm(v.items.value.single()); v.inc(); v.confirm(); advanceUntilIdle()
+        assertEquals(listOf(listOf<Int?>(80, 90, null)), repo.confirmPackMls)
     }
 
     @Test fun confirm_withInvalidMl_isBlocked() = runTest {

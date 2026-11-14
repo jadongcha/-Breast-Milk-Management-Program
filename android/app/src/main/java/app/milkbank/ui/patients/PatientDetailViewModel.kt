@@ -122,7 +122,7 @@ class PatientDetailViewModel(
         val regNo = _detail.value?.regNo
         viewModelScope.launch {
             try {
-                when (val r = stockRepo().add(patientId, p.kind, p.count, p.reason, p.memo, p.ml)) {
+                when (val r = stockRepo().add(patientId, p.kind, p.count, p.reason, p.memo, null, null)) { // TEMP bridge: Task 2 sends per-pack volumes / chosen pack ids
                     is ApiResult.Ok -> {
                         applyResult(r.value)
                         _message.value = savedMessage

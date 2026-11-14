@@ -60,12 +60,17 @@ class FakeStockRepository : StockRepository {
     var cancelHandler: suspend (Int) -> ApiResult<RecordResultDto> =
         { id -> ApiResult.Ok(RecordResultDto(recordDto(101, kind = "cancel", targetId = id), 2)) }
     var addCalls = 0
-    val addMls = mutableListOf<Int?>()
+    val addPackMls = mutableListOf<List<Int?>?>()
+    val addPackIds = mutableListOf<List<Int>?>()
     var cancelCalls = 0
 
-    override suspend fun add(patientId: Int, kind: String, count: Int, reason: String?, memo: String?, ml: Int?): ApiResult<RecordResultDto> {
+    override suspend fun add(
+        patientId: Int, kind: String, count: Int, reason: String?, memo: String?,
+        packMls: List<Int?>?, packIds: List<Int>?,
+    ): ApiResult<RecordResultDto> {
         addCalls++
-        addMls += ml
+        addPackMls += packMls
+        addPackIds += packIds
         return addHandler(patientId, kind, count, reason, memo)
     }
 

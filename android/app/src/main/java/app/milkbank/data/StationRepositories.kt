@@ -45,7 +45,7 @@ interface GuardianRepository {
         guardianToken: String,
         patientId: Int,
         count: Int,
-        ml: Int?,
+        packMls: List<Int?>?,
     ): ApiResult<GuardianSubmitResponse>
 
     /** Sent from the app scope without waiting for the answer; failures are ignored. */
@@ -54,7 +54,7 @@ interface GuardianRepository {
 
 interface SubmissionRepository {
     suspend fun pending(): ApiResult<List<PendingDto>>
-    suspend fun confirm(id: Int, count: Int, ml: Int?): ApiResult<ConfirmResponse>
+    suspend fun confirm(id: Int, count: Int, packMls: List<Int?>): ApiResult<ConfirmResponse>
     suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse>
 }
 
@@ -81,9 +81,9 @@ class HttpGuardianRepository(
     override suspend fun babies(stationToken: String?, guardianToken: String) =
         api.call(networkError) { it.guardianBabies(stationToken, "Bearer $guardianToken") }
 
-    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, ml: Int?) =
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, packMls: List<Int?>?) =
         api.call(networkError) {
-            it.guardianSubmit(stationToken, "Bearer $guardianToken", GuardianSubmitRequest(patientId, count, ml))
+            it.guardianSubmit(stationToken, "Bearer $guardianToken", GuardianSubmitRequest(patientId, count, packMls))
         }
 
     override fun logout(stationToken: String?, guardianToken: String): Job {
@@ -103,8 +103,8 @@ class HttpGuardianRepository(
 class HttpSubmissionRepository(private val api: MilkbankApi?, private val networkError: String) :
     SubmissionRepository {
     override suspend fun pending() = api.call(networkError) { it.submissions("pending") }
-    override suspend fun confirm(id: Int, count: Int, ml: Int?) =
-        api.call(networkError) { it.confirmSubmission(id, ConfirmRequest(count, ml)) }
+    override suspend fun confirm(id: Int, count: Int, packMls: List<Int?>) =
+        api.call(networkError) { it.confirmSubmission(id, ConfirmRequest(count, packMls)) }
 
     override suspend fun reject(id: Int, reason: String, memo: String?) =
         api.call(networkError) { it.rejectSubmission(id, RejectRequest(reason, memo)) }

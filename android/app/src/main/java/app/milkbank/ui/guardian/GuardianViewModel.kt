@@ -257,7 +257,7 @@ class GuardianViewModel(
                     }
                     Alive.Ok -> {}
                 }
-                when (val r = guardian().submit(st, t, cur.baby.patientId, cur.count, cur.ml)) {
+                when (val r = guardian().submit(st, t, cur.baby.patientId, cur.count, null)) { // TEMP bridge: Task 3 sends per-pack volumes
                     is ApiResult.Ok -> if (g == gen) {
                         lastRequest = clock.now()
                         _step.value = GuardianStep.Done(cur.baby, cur.count, cur.ml, r.value.balance, r.value.pendingCount)

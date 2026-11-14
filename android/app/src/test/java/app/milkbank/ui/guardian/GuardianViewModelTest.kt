@@ -34,7 +34,7 @@ class GuardianViewModelTest {
         var babiesHandler: suspend () -> ApiResult<List<BabyDto>> = { error("unset") }
         var submitHandler: suspend () -> ApiResult<GuardianSubmitResponse> = { error("unset") }
         var submitCalls = 0
-        val submittedMl = mutableListOf<Int?>()
+        val submittedPackMls = mutableListOf<List<Int?>?>()
         val logouts = mutableListOf<Pair<String?, String>>()
         override suspend fun login(stationToken: String?, phone: String, babyId: String) = loginHandler()
         override suspend fun babies(stationToken: String?, guardianToken: String) = babiesHandler()
@@ -43,10 +43,10 @@ class GuardianViewModelTest {
             guardianToken: String,
             patientId: Int,
             count: Int,
-            ml: Int?,
+            packMls: List<Int?>?,
         ): ApiResult<GuardianSubmitResponse> {
             submitCalls++
-            submittedMl += ml
+            submittedPackMls += packMls
             return submitHandler()
         }
 
@@ -128,7 +128,7 @@ class GuardianViewModelTest {
         assertEquals(GuardianStep.ConfirmSubmit(b1, 3, 240), vm.step.value)
         repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, 240), 2, 3)) }
         vm.submit()
-        assertEquals(listOf<Int?>(240), repo.submittedMl)
+        assertEquals(listOf<List<Int?>?>(null), repo.submittedPackMls) // TEMP bridge (Task 3 sends per-pack volumes)
         assertEquals(GuardianStep.Done(b1, 3, 240, 2, 3), vm.step.value)
     }
 
@@ -137,7 +137,7 @@ class GuardianViewModelTest {
         toConfirm(vm, "  ")
         repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, null), 2, 3)) }
         vm.submit()
-        assertEquals(listOf<Int?>(null), repo.submittedMl)
+        assertEquals(listOf<List<Int?>?>(null), repo.submittedPackMls)
         assertEquals(GuardianStep.Done(b1, 3, null, 2, 3), vm.step.value)
     }
 

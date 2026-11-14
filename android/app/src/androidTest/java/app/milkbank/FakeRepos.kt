@@ -113,13 +113,13 @@ class FakePatients(private val world: FakeWorld) : PatientRepository {
 
 class FakeStock(private val world: FakeWorld) : StockRepository {
     override suspend fun add(
-        patientId: Int, kind: String, count: Int, reason: String?, memo: String?, ml: Int?,
+        patientId: Int, kind: String, count: Int, reason: String?, memo: String?, packMls: List<Int?>?, packIds: List<Int>?,
     ): ApiResult<RecordResultDto> {
         val serverKind = if (kind == "intake") "in" else kind
         world.balance += if (kind == "intake") count else -count
         val record = RecordDto(
             id = world.records.size + 1, kind = serverKind, count = count, staffId = fakeNurse.id,
-            staffName = fakeNurse.name, createdAt = Instant.now(), canceled = false, ml = ml,
+            staffName = fakeNurse.name, createdAt = Instant.now(), canceled = false, ml = packMls?.filterNotNull()?.sum()?.takeIf { it > 0 },
         )
         world.records += record
         return ApiResult.Ok(RecordResultDto(record, world.balance))
@@ -198,13 +198,13 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
         return if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
     }
 
-    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, ml: Int?):
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, packMls: List<Int?>?):
         ApiResult<GuardianSubmitResponse> {
         receivedStationTokens.add(stationToken)
         val w = world ?: return ApiResult.Err(unsupported)
         w.pending += count
         return ApiResult.Ok(
-            GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.now(), ml), w.balance, w.pending),
+            GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.now(), packMls?.filterNotNull()?.sum()?.takeIf { it > 0 }), w.balance, w.pending),
         )
     }
 
@@ -216,7 +216,7 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
 
 class FakeSubmissions : SubmissionRepository {
     override suspend fun pending(): ApiResult<List<PendingDto>> = ApiResult.Ok(emptyList())
-    override suspend fun confirm(id: Int, count: Int, ml: Int?): ApiResult<ConfirmResponse> = ApiResult.Err(unsupported)
+    override suspend fun confirm(id: Int, count: Int, packMls: List<Int?>): ApiResult<ConfirmResponse> = ApiResult.Err(unsupported)
     override suspend fun reject(id: Int, reason: String, memo: String?): ApiResult<RejectResponse> =
         ApiResult.Err(unsupported)
 }

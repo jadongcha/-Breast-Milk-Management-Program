@@ -64,7 +64,11 @@ interface PatientRepository {
 
 interface StockRepository {
     /** kind is "intake", "use" or "discard". */
-    suspend fun add(patientId: Int, kind: String, count: Int, reason: String?, memo: String?, ml: Int?): ApiResult<RecordResultDto>
+    /** [packMls]: intake only, one entry per pack (null = unknown volume). [packIds]: use/discard, the packs that leave. */
+    suspend fun add(
+        patientId: Int, kind: String, count: Int, reason: String?, memo: String?,
+        packMls: List<Int?>?, packIds: List<Int>?,
+    ): ApiResult<RecordResultDto>
     suspend fun cancel(recordId: Int): ApiResult<RecordResultDto>
 }
 
@@ -158,8 +162,10 @@ class HttpPatientRepository(private val api: MilkbankApi?, private val networkEr
 }
 
 class HttpStockRepository(private val api: MilkbankApi?, private val networkError: String) : StockRepository {
-    override suspend fun add(patientId: Int, kind: String, count: Int, reason: String?, memo: String?, ml: Int?) =
-        api.call(networkError) { it.addRecord(patientId, RecordRequest(kind, count, reason, memo, ml)) }
+    override suspend fun add(
+        patientId: Int, kind: String, count: Int, reason: String?, memo: String?,
+        packMls: List<Int?>?, packIds: List<Int>?,
+    ) = api.call(networkError) { it.addRecord(patientId, RecordRequest(kind, count, reason, memo, packMls, packIds)) }
 
     override suspend fun cancel(recordId: Int) = api.call(networkError) { it.cancelRecord(recordId) }
 }

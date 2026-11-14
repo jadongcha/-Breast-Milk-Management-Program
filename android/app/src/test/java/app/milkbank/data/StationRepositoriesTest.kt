@@ -59,13 +59,13 @@ class StationRepositoriesTest {
     }
 
     @Test
-    fun guardianSubmit_sendsMlWhenGiven() = runBlocking {
+    fun guardianSubmit_sendsPackMlsWhenGiven() = runBlocking {
         server.enqueue(
             json("""{"submission":{"id":9,"count":3,"ml":240,"submitted_at":"2026-11-10T05:13:00"},"balance":7,"pending_count":1}"""),
         )
-        val r = HttpGuardianRepository(api, net).submit("st", "gt", 4, 3, 240) as ApiResult.Ok
+        val r = HttpGuardianRepository(api, net).submit("st", "gt", 4, 3, listOf(80, 80, null)) as ApiResult.Ok
         assertEquals(240, r.value.submission.ml)
-        assertEquals("""{"patient_id":4,"count":3,"ml":240}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"patient_id":4,"count":3,"pack_mls":[80,80,null]}""", server.takeRequest().body.readUtf8())
     }
 
     @Test
@@ -182,12 +182,12 @@ class StationRepositoriesTest {
                 "balance":7,"submission":$sub}""",
             ),
         )
-        val c = (HttpSubmissionRepository(api, net).confirm(3, 2, null) as ApiResult.Ok).value
+        val c = (HttpSubmissionRepository(api, net).confirm(3, 2, listOf(80, null)) as ApiResult.Ok).value
         assertEquals(7, c.balance)
         assertEquals(2, c.submission.confirmedCount)
         val creq = server.takeRequest()
         assertEquals("/submissions/3/confirm", creq.path)
-        assertEquals("""{"count":2,"ml":null}""", creq.body.readUtf8())
+        assertEquals("""{"count":2,"pack_mls":[80,null]}""", creq.body.readUtf8())
 
         server.enqueue(json("""{"submission":$sub}"""))
         HttpSubmissionRepository(api, net).reject(3, "mismatch", "메모")

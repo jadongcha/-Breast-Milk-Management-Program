@@ -124,14 +124,14 @@ class PendingViewModel(
     fun confirm() {
         val d = _dialog.value as? PendingDialog.Confirm ?: return
         if (!canConfirm(d)) return
-        // Empty clears the volume (null is always sent), so a guardian's value the nurse erased stays erased.
-        val ml = parseMl(d.mlText).valueOrNull()
+        // TEMP bridge: Task 3 replaces the total-mL field; until then the guardian's per-pack volumes go through.
+        val packMls = List(d.count) { d.item.packMls.getOrNull(it) }
         // Set synchronously (before launching) so a second tap can never start a second intake.
         if (d.submitting) return
         _dialog.value = d.copy(submitting = true)
         viewModelScope.launch {
             try {
-                when (val r = submissions().confirm(d.item.id, d.count, ml)) {
+                when (val r = submissions().confirm(d.item.id, d.count, packMls)) {
                     is ApiResult.Ok -> {
                         val balance = r.value.balance
                         banner.post(ResultBanner(d.item.babyId, "intake_confirm", d.count, balance))

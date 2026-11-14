@@ -111,6 +111,8 @@ data class PatientDto(
     @SerialName("days_threshold") val daysThreshold: Int? = null,
     @SerialName("packs_threshold") val packsThreshold: Int? = null,
     val balance: Int,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
 )
 
 @Serializable
@@ -128,6 +130,18 @@ data class RecordDto(
     @Serializable(with = InstantSerializer::class)
     val createdAt: Instant,
     val canceled: Boolean,
+    /** How many of this record's packs have no known volume. */
+    @SerialName("ml_unknown") val mlUnknown: Int = 0,
+)
+
+/** One pack still in stock; [ml] is null when its volume is unknown. */
+@Serializable
+data class PackDto(
+    val id: Int,
+    val ml: Int? = null,
+    @SerialName("created_at")
+    @Serializable(with = InstantSerializer::class)
+    val createdAt: Instant,
 )
 
 @Serializable
@@ -148,20 +162,32 @@ data class PatientDetailDto(
     @SerialName("packs_threshold") val packsThreshold: Int? = null,
     val balance: Int,
     val records: List<RecordDto>,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
+    val packs: List<PackDto> = emptyList(),
 )
 
-/** kind is "intake", "use" or "discard". */
+/**
+ * kind is "intake", "use" or "discard". [packMls] (intake: one entry per pack, null = volume unknown) and
+ * [packIds] (use/discard: the packs that leave) are left out when null.
+ */
 @Serializable
 data class RecordRequest(
     val kind: String,
     val count: Int,
     @SerialName("discard_reason") val discardReason: String? = null,
     val memo: String? = null,
-    val ml: Int? = null,
+    @SerialName("pack_mls") val packMls: List<Int?>? = null,
+    @SerialName("pack_ids") val packIds: List<Int>? = null,
 )
 
 @Serializable
-data class RecordResultDto(val record: RecordDto, val balance: Int)
+data class RecordResultDto(
+    val record: RecordDto,
+    val balance: Int,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
+)
 
 @Serializable
 data class StationCreateRequest(val name: String)
@@ -197,13 +223,19 @@ data class BabyDto(
     @SerialName("baby_id") val babyId: String,
     val balance: Int,
     @SerialName("pending_count") val pendingCount: Int,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
 )
 
 @Serializable
 data class GuardianLoginResponse(val token: String, val babies: List<BabyDto>)
 
 @Serializable
-data class GuardianSubmitRequest(@SerialName("patient_id") val patientId: Int, val count: Int, val ml: Int? = null)
+data class GuardianSubmitRequest(
+    @SerialName("patient_id") val patientId: Int,
+    val count: Int,
+    @SerialName("pack_mls") val packMls: List<Int?>? = null,
+)
 
 @Serializable
 data class SubmissionBriefDto(
@@ -220,6 +252,8 @@ data class GuardianSubmitResponse(
     val submission: SubmissionBriefDto,
     val balance: Int,
     @SerialName("pending_count") val pendingCount: Int,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
 )
 
 @Serializable
@@ -235,6 +269,7 @@ data class PendingDto(
     val count: Int,
     val discharged: Boolean,
     val ml: Int? = null,
+    @SerialName("pack_mls") val packMls: List<Int?> = emptyList(),
 )
 
 /** status is "pending", "confirmed" or "rejected". */
@@ -256,14 +291,24 @@ data class SubmissionDto(
     val memo: String? = null,
     val ml: Int? = null,
     @SerialName("confirmed_ml") val confirmedMl: Int? = null,
+    @SerialName("pack_mls") val packMls: List<Int?> = emptyList(),
 )
 
-/** [ml] has no default on purpose: it is always sent (null clears it; omitting it keeps the guardian's value). */
+/**
+ * [packMls] has no default on purpose: it is always sent, one entry per received pack (null = volume unknown),
+ * so a volume the nurse erased stays erased.
+ */
 @Serializable
-data class ConfirmRequest(val count: Int, val ml: Int?)
+data class ConfirmRequest(val count: Int, @SerialName("pack_mls") val packMls: List<Int?>)
 
 @Serializable
-data class ConfirmResponse(val record: RecordDto, val balance: Int, val submission: SubmissionDto)
+data class ConfirmResponse(
+    val record: RecordDto,
+    val balance: Int,
+    val submission: SubmissionDto,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
+)
 
 @Serializable
 data class RejectRequest(val reason: String, val memo: String? = null)
@@ -282,6 +327,8 @@ data class OverviewRowDto(
     @SerialName("days_left") val daysLeft: Double? = null,
     val status: String,
     @SerialName("pending_packs") val pendingPacks: Int,
+    @SerialName("balance_ml") val balanceMl: Int = 0,
+    @SerialName("unknown_ml_packs") val unknownMlPacks: Int = 0,
 )
 
 @Serializable
