@@ -71,6 +71,8 @@ def create_patient(db: Session, clock: Clock, data: PatientCreate) -> Patient:
 
 def update_patient(db: Session, patient_id: int, data: PatientUpdate) -> Patient:
     patient = get_patient(db, patient_id)
+    if patient.erased_at is not None:
+        raise Conflict("말소된 환자는 수정할 수 없습니다")
     values = data.model_dump(exclude_unset=True)
     # 필수 필드와 날짜·알림 사용 여부는 null로 지울 수 없다(보내지 않은 것으로 본다).
     for key in (*_REQUIRED, "guardian_phone", "admitted_on", "alert_enabled"):

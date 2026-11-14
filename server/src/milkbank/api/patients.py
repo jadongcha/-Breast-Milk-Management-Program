@@ -2,10 +2,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from .. import discharge as discharge_service
 from .. import patients as patient_service
 from .. import stock as stock_service
 from ..models import Staff
 from ..schemas import (
+    DischargeIn,
     PatientCreate,
     PatientDetail,
     PatientOut,
@@ -49,3 +51,20 @@ def create_patient(body: PatientCreate, request: Request, db: DbDep, _: AdminDep
 @router.patch("/{patient_id}", response_model=PatientOut)
 def update_patient(patient_id: int, body: PatientUpdate, db: DbDep, _: AdminDep):
     return _out(db, patient_service.update_patient(db, patient_id, body))
+
+
+@router.post("/{patient_id}/discharge", response_model=PatientOut)
+def discharge_patient(
+    patient_id: int, body: DischargeIn, request: Request, db: DbDep, staff: AdminDep
+):
+    patient = discharge_service.discharge(
+        db, request.app.state.clock, patient_id=patient_id, remaining=body.remaining,
+        discard_reason=body.discard_reason, staff=staff,
+    )
+    return _out(db, patient)
+
+
+@router.post("/{patient_id}/erase", response_model=PatientOut)
+def erase_patient(patient_id: int, request: Request, db: DbDep, _: AdminDep):
+    patient = discharge_service.erase(db, request.app.state.clock, patient_id=patient_id)
+    return _out(db, patient)

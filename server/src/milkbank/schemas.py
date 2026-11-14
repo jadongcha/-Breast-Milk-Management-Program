@@ -117,10 +117,16 @@ class PatientOut(BaseModel):
     status: PatientStatus
     admitted_on: date
     discharged_on: date | None
+    erased_at: datetime | None
     alert_enabled: bool
     days_threshold: int | None
     packs_threshold: int | None
     balance: int
+
+
+class DischargeIn(BaseModel):
+    remaining: Literal["return", "discard"]
+    discard_reason: DiscardReason | None = None
 
 
 class RecordIn(BaseModel):

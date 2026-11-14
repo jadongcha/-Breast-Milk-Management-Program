@@ -1,3 +1,7 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -5,15 +9,54 @@ from .api import admin, auth, guardian, patients, staff, stations, stock, submis
 from .clock import Clock, SystemClock
 from .config import Config, load_config
 from .db import make_engine, make_session_factory
+from . import discharge
 from .errors import DomainError
 from .migrate import migrate
+
+
+log = logging.getLogger(__name__)
+
+
+def _erase_due_once(app: FastAPI) -> None:
+    with app.state.session_factory() as db:
+        try:
+            ids = discharge.erase_due(db, app.state.clock)
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+    if ids:
+        log.info("보관 기간이 지난 환자 %d명의 개인정보를 말소했습니다", len(ids))
+
+
+async def _auto_erase_loop(app: FastAPI) -> None:
+    interval = app.state.config.auto_erase_interval_seconds
+    while True:
+        try:
+            await asyncio.to_thread(_erase_due_once, app)
+        except Exception:
+            log.exception("자동 말소에 실패했습니다")
+        await asyncio.sleep(interval)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    task = asyncio.create_task(_auto_erase_loop(app))
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_app(config: Config, clock: Clock | None = None) -> FastAPI:
     clock = clock or SystemClock()
     engine = make_engine(config.db_path)
     migrate(engine, config.db_path, clock.now())
-    app = FastAPI(title="milkbank")
+    app = FastAPI(title="milkbank", lifespan=_lifespan)
     app.state.config = config
     app.state.clock = clock
     app.state.engine = engine

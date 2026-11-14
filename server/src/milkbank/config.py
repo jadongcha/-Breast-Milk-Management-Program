@@ -14,6 +14,7 @@ class Config:
     station_lock_minutes: int = 10
     guardian_idle_seconds: int = 60
     pending_limit: int = 5
+    auto_erase_interval_seconds: int = 3600
 
     @property
     def tls_dir(self) -> Path:
