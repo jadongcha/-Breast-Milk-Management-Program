@@ -42,12 +42,6 @@ def balance(db: Session, patient_id: int) -> int:
     return intake - outflow
 
 
-def validate_ml(ml: int | None) -> int | None:
-    if ml is not None and not 1 <= ml <= 20000:
-        raise BadRequest("용량은 1~20000mL 사이여야 합니다")
-    return ml
-
-
 def add_record(
     db: Session,
     clock: Clock,
