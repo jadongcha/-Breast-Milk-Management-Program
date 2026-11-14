@@ -46,6 +46,13 @@ class LoginViewModelTest {
         assertNull(v.state.value.error)
     }
 
+    @Test fun success_keepsTheServerIdleMinutes() = runTest {
+        auth.loginHandler = { _, _ -> ApiResult.Ok(LoginResponse("tok", false, staffDto(), staffIdleMinutes = 3)) }
+        val v = vm()
+        v.submit(); advanceUntilIdle()
+        assertEquals(3, session.state.value?.idleMinutes)
+    }
+
     @Test fun success_mustChange_goesToPassword() = runTest {
         auth.loginHandler = { _, _ -> ApiResult.Ok(LoginResponse("tok", true, staffDto(true))) }
         val v = vm()

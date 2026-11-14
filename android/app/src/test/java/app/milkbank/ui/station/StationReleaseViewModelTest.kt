@@ -122,6 +122,14 @@ class StationReleaseViewModelTest {
         assertEquals(station, store.config.first())
     }
 
+    @Test fun login_admin_keepsTheServerIdleMinutes() = runBlocking {
+        fakeAuth.loginHandler = { _, _ -> ApiResult.Ok(LoginResponse("tok", false, admin, staffIdleMinutes = 3)) }
+        val vm = vm()
+        vm.login("admin", "pw")
+        assertEquals(ReleaseState.Ready, vm.awaitSettled())
+        assertEquals(3, session.state.value?.idleMinutes)
+    }
+
     @Test fun login_admin_becomesReady() = runBlocking {
         loginAs(admin)
         val vm = vm()

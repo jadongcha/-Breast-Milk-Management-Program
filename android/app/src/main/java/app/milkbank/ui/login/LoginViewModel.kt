@@ -50,7 +50,7 @@ class LoginViewModel(
             try {
                 when (val r = auth().login(username, password)) {
                     is ApiResult.Ok -> {
-                        session.start(r.value.token, r.value.staff)
+                        session.start(r.value.token, r.value.staff, r.value.staffIdleMinutes)
                         val next = if (r.value.staff.mustChangePassword || r.value.mustChangePassword) Password else Patients
                         _state.update { it.copy(loading = false, password = "", next = next) }
                     }

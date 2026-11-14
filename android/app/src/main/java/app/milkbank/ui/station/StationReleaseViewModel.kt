@@ -82,7 +82,7 @@ class StationReleaseViewModel(
                 when (val r = auth().login(name, password)) {
                     is ApiResult.Ok -> {
                         // The session is needed first: the repository's logout acts on the current session.
-                        session.start(r.value.token, r.value.staff)
+                        session.start(r.value.token, r.value.staff, r.value.staffIdleMinutes)
                         if (r.value.staff.role == "admin") {
                             _state.value = ReleaseState.Ready
                         } else {
