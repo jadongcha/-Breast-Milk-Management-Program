@@ -2,6 +2,7 @@
 
 모든 트랜잭션은 BEGIN IMMEDIATE로 시작하므로 각 함수의 첫 쿼리가 쓰기 잠금을 잡는다.
 """
+import logging
 from datetime import timedelta
 from typing import Literal
 
@@ -23,6 +24,8 @@ from .models import (
     Submission,
 )
 from .reports import kst_today
+
+log = logging.getLogger(__name__)
 
 
 def discharge(
@@ -48,10 +51,13 @@ def discharge(
             kind, reason = RecordKind.DISCARD, discard_reason
         else:
             kind, reason = RecordKind.RETURN, None
-        stock.add_record(
-            db, clock, patient_id=patient_id, kind=kind, count=left,
-            staff=staff, discard_reason=reason,
-        )
+        # 간호사 입력 한도(1~100팩)는 적용하지 않고 잔량 전부를 한 기록으로 남긴다.
+        db.add(StockRecord(
+            patient_id=patient_id, kind=kind, count=left, ml=None,
+            discard_reason=reason, target_id=None, memo=None,
+            staff_id=staff.id, created_at=clock.now(),
+        ))
+        db.flush()
     patient.status = PatientStatus.DISCHARGED
     patient.discharged_on = kst_today(clock)
     db.flush()
@@ -104,6 +110,11 @@ def erase_due(db: Session, clock: Clock) -> list[int]:
     done = []
     for p in candidates:
         if today >= p.discharged_on + timedelta(days=retention):
-            erase(db, clock, patient_id=p.id)
+            try:
+                with db.begin_nested():
+                    erase(db, clock, patient_id=p.id)
+            except Exception:
+                log.exception("환자 %d 말소에 실패해 건너뜁니다", p.id)
+                continue
             done.append(p.id)
     return done

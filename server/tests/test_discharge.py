@@ -8,7 +8,7 @@ from milkbank.config import Config
 from milkbank.main import create_app
 from milkbank import discharge as discharge_service
 from milkbank.models import (
-    DiscardReason, Patient, RecordKind, Staff, StockRecord, Submission, SubmissionStatus,
+    DiscardReason, Patient, PatientStatus, RecordKind, Staff, StockRecord, Submission, SubmissionStatus,
 )
 
 
@@ -188,10 +188,9 @@ def test_auto_erase_runs_on_startup(client, app, tmp_path, admin_token, world):
     app2 = create_app(Config(db_path=tmp_path / "t.db"), later)
     try:
         with TestClient(app2):
-            pass
-        with app2.state.session_factory() as db:
-            got = db.get(Patient, p)
-            assert got.erased_at is not None and got.reg_no == f"말소-{p}"
+            with app2.state.session_factory() as db:
+                got = db.get(Patient, p)
+                assert got.erased_at is not None and got.reg_no == f"말소-{p}"
     finally:
         app2.state.engine.dispose()
 
@@ -213,3 +212,47 @@ def test_discharge_erase_admin_only(client, admin_token, nurse_token, world):
     assert r.status_code == 403
     r = client.post(f"/patients/{p}/erase", headers=auth(nurse_token))
     assert r.status_code == 403
+
+
+def test_discharge_over_100_packs(client, app, admin_token, world):
+    p = world["p1"]  # 이미 3팩
+    _intake(client, admin_token, p, 100)
+    _intake(client, admin_token, p, 47)
+    r = _discharge(client, admin_token, p)
+    assert r.status_code == 200, r.text
+    assert r.json()["balance"] == 0
+    rets = [x for x in _records(app, p) if x.kind == RecordKind.RETURN]
+    assert [x.count for x in rets] == [150]
+
+
+def test_reg_no_erased_prefix_rejected(client, admin_token, world):
+    msg = "‘말소-’로 시작하는 등록번호는 쓸 수 없습니다"
+    body = {"reg_no": " 말소-7", "baby_name": "a", "bed": "3",
+            "guardian_name": "g", "guardian_phone": "010-1111-2222"}
+    r = client.post("/patients", json=body, headers=auth(admin_token))
+    assert r.status_code == 400 and r.json()["detail"] == msg
+    r = client.patch(f"/patients/{world['p1']}", json={"reg_no": "말소-7"}, headers=auth(admin_token))
+    assert r.status_code == 400 and r.json()["detail"] == msg
+
+
+def test_erase_due_skips_failing_patient(client, app, admin_token, world):
+    p1, p2 = world["p1"], world["p2"]
+    assert _discharge(client, admin_token, p1).status_code == 200
+    assert _discharge(client, admin_token, p2).status_code == 200
+    with app.state.session_factory() as db:
+        for pid in (p1, p2):
+            db.get(Patient, pid).discharged_on = date(2026, 1, 1)
+        db.add(Patient(
+            reg_no=f"말소-{p1}", baby_name="x", bed="9", guardian_name="g",
+            guardian_phone="01000000000", status=PatientStatus.ADMITTED,
+            admitted_on=date(2026, 1, 1),
+            created_at=app.state.clock.now(),
+        ))
+        db.commit()
+    with app.state.session_factory() as db:
+        ids = discharge_service.erase_due(db, app.state.clock)
+        db.commit()
+    assert ids == [p2]
+    with app.state.session_factory() as db:
+        assert db.get(Patient, p1).erased_at is None
+        assert db.get(Patient, p2).erased_at is not None

@@ -29,18 +29,28 @@ def _erase_due_once(app: FastAPI) -> None:
         log.info("보관 기간이 지난 환자 %d명의 개인정보를 말소했습니다", len(ids))
 
 
+async def _run_pass(app: FastAPI) -> None:
+    """한 번 실행한다. 취소돼도 이미 도는 작업이 끝난 뒤에 취소를 전달한다."""
+    fut = asyncio.ensure_future(asyncio.to_thread(_erase_due_once, app))
+    try:
+        await asyncio.shield(fut)
+    except asyncio.CancelledError:
+        await asyncio.gather(fut, return_exceptions=True)
+        raise
+    except Exception:
+        log.exception("자동 말소에 실패했습니다")
+
+
 async def _auto_erase_loop(app: FastAPI) -> None:
     interval = app.state.config.auto_erase_interval_seconds
     while True:
-        try:
-            await asyncio.to_thread(_erase_due_once, app)
-        except Exception:
-            log.exception("자동 말소에 실패했습니다")
         await asyncio.sleep(interval)
+        await _run_pass(app)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    await _run_pass(app)  # 시작할 때 한 번, 끝날 때까지 기다린다.
     task = asyncio.create_task(_auto_erase_loop(app))
     try:
         yield

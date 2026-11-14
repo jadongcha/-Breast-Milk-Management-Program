@@ -42,6 +42,8 @@ def _clean(values: dict) -> dict:
             out[key] = (out[key] or "").strip()
             if not out[key]:
                 raise BadRequest(f"{label}을(를) 입력해 주세요")
+    if out.get("reg_no", "").startswith("말소-"):
+        raise BadRequest("‘말소-’로 시작하는 등록번호는 쓸 수 없습니다")
     if "guardian_phone" in out:
         out["guardian_phone"] = normalize_phone(out["guardian_phone"])
     return out
