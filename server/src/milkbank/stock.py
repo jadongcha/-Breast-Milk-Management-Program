@@ -41,6 +41,12 @@ def balance(db: Session, patient_id: int) -> int:
     return intake - outflow
 
 
+def validate_ml(ml: int | None) -> int | None:
+    if ml is not None and not 1 <= ml <= 20000:
+        raise BadRequest("용량은 1~20000mL 사이여야 합니다")
+    return ml
+
+
 def add_record(
     db: Session,
     clock: Clock,
@@ -51,6 +57,7 @@ def add_record(
     staff: Staff,
     discard_reason: DiscardReason | None = None,
     memo: str | None = None,
+    ml: int | None = None,
 ) -> StockRecord:
     # 첫 쿼리가 쓰기 잠금을 잡는다. 이후 잔량 확인과 삽입이 한 트랜잭션에서 이뤄진다.
     patient = db.get(Patient, patient_id)
@@ -62,6 +69,7 @@ def add_record(
         raise BadRequest("잘못된 기록 종류입니다")
     if not 1 <= count <= 100:
         raise BadRequest("팩 수는 1~100 사이여야 합니다")
+    validate_ml(ml)
     if kind == RecordKind.DISCARD and discard_reason is None:
         raise BadRequest("폐기 사유를 선택해 주세요")
     if kind != RecordKind.DISCARD and discard_reason is not None:
@@ -75,6 +83,7 @@ def add_record(
         patient_id=patient_id,
         kind=kind,
         count=count,
+        ml=ml,
         discard_reason=discard_reason,
         target_id=None,
         memo=memo,
@@ -122,6 +131,7 @@ def cancel_record(
         patient_id=target.patient_id,
         kind=RecordKind.CANCEL,
         count=target.count,
+        ml=target.ml,
         discard_reason=None,
         target_id=target.id,
         memo=None,
@@ -138,6 +148,7 @@ class RecordView:
     id: int
     kind: RecordKind
     count: int
+    ml: int | None
     discard_reason: DiscardReason | None
     target_id: int | None
     memo: str | None
@@ -162,6 +173,7 @@ def _views(db: Session, patient_id: int, rows) -> list[RecordView]:
             id=r.id,
             kind=r.kind,
             count=r.count,
+            ml=r.ml,
             discard_reason=r.discard_reason,
             target_id=r.target_id,
             memo=r.memo,

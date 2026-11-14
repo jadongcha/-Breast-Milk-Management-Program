@@ -29,7 +29,8 @@ def list_submissions(db: DbDep, staff: StaffDep, status: Literal["pending"] = "p
 @router.post("/submissions/{submission_id}/confirm", response_model=ConfirmResult)
 def confirm(submission_id: int, body: ConfirmIn, request: Request, db: DbDep, staff: StaffDep):
     sub, record = submission_service.confirm(
-        db, request.app.state.clock, submission_id=submission_id, count=body.count, staff=staff
+        db, request.app.state.clock, submission_id=submission_id, count=body.count,
+        ml=body.ml, ml_given="ml" in body.model_fields_set, staff=staff,
     )
     return ConfirmResult(
         record=RecordOut.model_validate(stock_service.record_view(db, record)),

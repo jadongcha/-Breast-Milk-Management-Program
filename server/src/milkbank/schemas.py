@@ -105,6 +105,7 @@ class PatientOut(BaseModel):
 class RecordIn(BaseModel):
     kind: Literal["intake", "use", "discard"]
     count: int
+    ml: int | None = None
     discard_reason: DiscardReason | None = None
     memo: str | None = None
 
@@ -115,6 +116,7 @@ class RecordOut(BaseModel):
     id: int
     kind: RecordKind
     count: int
+    ml: int | None
     discard_reason: DiscardReason | None
     target_id: int | None
     memo: str | None
@@ -184,6 +186,7 @@ class GuardianLoginOut(BaseModel):
 class SubmitIn(BaseModel):
     patient_id: int
     count: int
+    ml: int | None = None
 
 
 class SubmittedOut(BaseModel):
@@ -191,6 +194,7 @@ class SubmittedOut(BaseModel):
 
     id: int
     count: int
+    ml: int | None
     submitted_at: datetime
 
 
@@ -209,6 +213,8 @@ class SubmissionOut(BaseModel):
     submitted_at: datetime
     status: SubmissionStatus
     confirmed_count: int | None
+    ml: int | None
+    confirmed_ml: int | None
     handled_by: int | None
     handled_at: datetime | None
     reject_reason: RejectReason | None
@@ -225,11 +231,13 @@ class PendingOut(BaseModel):
     station_name: str
     submitted_at: datetime
     count: int
+    ml: int | None
     discharged: bool
 
 
 class ConfirmIn(BaseModel):
     count: int
+    ml: int | None = None
 
 
 class ConfirmResult(BaseModel):

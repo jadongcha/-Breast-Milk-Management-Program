@@ -38,6 +38,7 @@ def add_record(
         staff=staff,
         discard_reason=body.discard_reason,
         memo=body.memo,
+        ml=body.ml,
     )
     return _result(db, record)
 
