@@ -319,6 +319,8 @@ class OverviewRow(BaseModel):
     baby_id: str
     bed: str
     balance: int
+    balance_ml: int
+    unknown_ml_packs: int
     daily_avg: float | None
     days_left: float | None
     status: Literal["enough", "low", "empty"]

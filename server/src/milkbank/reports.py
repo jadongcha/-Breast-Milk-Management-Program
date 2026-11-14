@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .clock import KST, Clock
 from .judge import Judgement, judge
-from . import stock
+from . import packs, stock
 from .models import (
     Patient,
     PatientStatus,
@@ -101,12 +101,15 @@ def overview(db: Session, clock: Clock, s: Settings) -> dict:
     rows = []
     for p in patients:
         j = judge_patient(db, p, today, s)
+        held = packs.summary(db, p.id)
         rows.append(
             {
                 "patient_id": p.id,
                 "baby_id": p.reg_no,
                 "bed": p.bed,
                 "balance": stock.balance(db, p.id),
+                "balance_ml": held.ml,
+                "unknown_ml_packs": held.unknown,
                 "daily_avg": j.daily_avg,
                 "days_left": j.days_left,
                 "status": j.status,
