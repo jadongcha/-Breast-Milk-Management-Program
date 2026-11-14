@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.milkbank.api.PatientDetailDto
 import app.milkbank.api.PatientForm
+import app.milkbank.core.ApiError
 import app.milkbank.core.ApiResult
 import app.milkbank.core.Clock
 import app.milkbank.data.AdminRepository
@@ -89,21 +90,7 @@ class PatientFormViewModel(
     private fun load(id: Int) {
         viewModelScope.launch {
             try {
-                when (val r = repo().detail(id)) {
-                    is ApiResult.Ok -> {
-                        existing = r.value
-                        refreshActions()
-                        _balance.value = r.value.balance
-                        val loaded = PatientFormState(
-                            r.value.regNo, r.value.babyName, r.value.bed,
-                            r.value.guardianName, r.value.guardianPhone, r.value.admittedOn,
-                        )
-                        loadedForm = loaded
-                        _loadedRegNo.value = r.value.regNo
-                        _form.value = loaded
-                    }
-                    is ApiResult.Err -> _error.value = r.error.message
-                }
+                fetchDetail(id, reportError = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -114,6 +101,31 @@ class PatientFormViewModel(
             }
         }
     }
+
+    /**
+     * Reads the patient from the server and replaces everything shown (form, balance, which actions are offered).
+     * True when the fresh state was applied. With [reportError] false a failed read leaves the current message alone.
+     */
+    private suspend fun fetchDetail(id: Int, reportError: Boolean): Boolean =
+        when (val r = repo().detail(id)) {
+            is ApiResult.Ok -> {
+                existing = r.value
+                refreshActions()
+                _balance.value = r.value.balance
+                val loaded = PatientFormState(
+                    r.value.regNo, r.value.babyName, r.value.bed,
+                    r.value.guardianName, r.value.guardianPhone, r.value.admittedOn,
+                )
+                loadedForm = loaded
+                _loadedRegNo.value = r.value.regNo
+                _form.value = loaded
+                true
+            }
+            is ApiResult.Err -> {
+                if (reportError) _error.value = r.error.message
+                false
+            }
+        }
 
     private fun refreshActions() {
         val d = existing ?: return
@@ -133,10 +145,39 @@ class PatientFormViewModel(
         return true
     }
 
-    fun openDischarge() { if (_canDischarge.value && !blockedByUnsavedChanges()) _dischargeDialog.value = true }
+    /**
+     * Re-reads the patient first, so the dialog never rests on a stale balance or status. The dialog opens only if
+     * the fresh state still allows discharge.
+     */
+    fun openDischarge() {
+        if (_canDischarge.value && !blockedByUnsavedChanges()) openAfterRefresh { if (_canDischarge.value) _dischargeDialog.value = true }
+    }
+
     fun closeDischarge() { _dischargeDialog.value = false }
-    fun openErase() { if (_canErase.value && !blockedByUnsavedChanges()) _eraseDialog.value = true }
+
+    fun openErase() {
+        if (_canErase.value && !blockedByUnsavedChanges()) openAfterRefresh { if (_canErase.value) _eraseDialog.value = true }
+    }
+
     fun closeErase() { _eraseDialog.value = false }
+
+    private fun openAfterRefresh(open: () -> Unit) {
+        val id = patientId ?: return
+        if (!_submitting.compareAndSet(false, true)) return
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                if (fetchDetail(id, reportError = true)) open()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onError(e)
+                _error.value = unexpectedError
+            } finally {
+                _submitting.value = false
+            }
+        }
+    }
 
     /** [remaining] is "return" or "discard"; a discard needs one of the known reasons. */
     fun discharge(remaining: String, discardReason: String?) {
@@ -151,9 +192,10 @@ class PatientFormViewModel(
                 is ApiResult.Ok -> {
                     val kind = if (remaining == "discard") "discard" else "discharge_return"
                     banner.post(ResultBanner(base.regNo, kind, base.balance, r.value.balance))
+                    _canDischarge.value = false
                     _saved.value = true
                 }
-                is ApiResult.Err -> _error.value = r.error.message
+                is ApiResult.Err -> failed(id, r.error)
             }
         }
     }
@@ -165,12 +207,19 @@ class PatientFormViewModel(
             when (val r = admin().erase(id)) {
                 is ApiResult.Ok -> {
                     _erased.value = true
+                    _canErase.value = false
                     banner.notifyChanged()
                     _saved.value = true
                 }
-                is ApiResult.Err -> _error.value = r.error.message
+                is ApiResult.Err -> failed(id, r.error)
             }
         }
+    }
+
+    /** Shows the server's message; a 409 means this screen is out of date, so the patient is re-read. */
+    private suspend fun failed(id: Int, e: ApiError) {
+        _error.value = e.message
+        if (e.status == 409) fetchDetail(id, reportError = false)
     }
 
     /** Runs a server action behind the same one-at-a-time lock as saving; closes both dialogs when done. */
