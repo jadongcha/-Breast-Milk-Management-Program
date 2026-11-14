@@ -3,6 +3,8 @@ package app.milkbank.ui.patients
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -158,9 +160,13 @@ fun PatientListContent(
             }
             if (showIncludeDischarged) {
                 item {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .toggleable(value = includeDischarged, role = Role.Switch, onValueChange = viewModel::setIncludeDischarged),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(stringResource(R.string.include_discharged), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                        Switch(checked = includeDischarged, onCheckedChange = viewModel::setIncludeDischarged)
+                        Switch(checked = includeDischarged, onCheckedChange = null)
                     }
                 }
             }

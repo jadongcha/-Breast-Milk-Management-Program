@@ -56,11 +56,11 @@ val fakeNurse = StaffDto(
     id = 1, username = FAKE_USERNAME, name = "김간호", role = "nurse", active = true, mustChangePassword = false,
 )
 
-/** One patient whose balance the fake stock repository updates; shared by the fake repositories. */
 val fakeAdminStaff = StaffDto(
     id = 2, username = FAKE_ADMIN_USERNAME, name = "박관리", role = "admin", active = true, mustChangePassword = false,
 )
 
+/** One patient whose balance the fake stock repository updates; shared by the fake repositories. */
 class FakeWorld {
     @Volatile var balance = 0
     @Volatile var pending = 0

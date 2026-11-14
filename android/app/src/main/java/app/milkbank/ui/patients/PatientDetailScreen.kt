@@ -109,7 +109,12 @@ fun PatientDetailScreen(
                 }
 
                 val canSave = online && !submitting
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (d.status != "admitted") {
+                    Text(
+                        stringResource(R.string.patient_discharged_notice),
+                        style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
                         onClick = { dialog = "intake" }, enabled = canSave,
                         modifier = Modifier.weight(1f).heightIn(min = 64.dp),

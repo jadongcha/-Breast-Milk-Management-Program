@@ -226,6 +226,12 @@ class PatientDetailViewModelTest {
         assertFalse(v.canCancel(recordDto(1, staffId = 1, createdAt = clock.now())))
     }
 
+    @Test fun canCancel_falseForDischargedPatient() = runTest {
+        patients.detailHandler = { ApiResult.Ok(detailDto(it).copy(status = "discharged")) }
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        assertFalse(v.canCancel(recordDto(1, staffId = 1, createdAt = clock.now())))
+    }
+
     @Test fun networkErrorOnAdd_refreshesFromServerAndWarnsUncertain() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
         // The write reached the server but the answer was lost: the next detail shows balance 8.

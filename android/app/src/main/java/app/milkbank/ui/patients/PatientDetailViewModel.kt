@@ -82,6 +82,7 @@ class PatientDetailViewModel(
     }
 
     fun canCancel(record: RecordDto): Boolean {
+        if (_detail.value?.let { it.status != "admitted" } == true) return false // the server rejects it too
         val me = session.state.value?.staff ?: return false
         return canCancel(record, me, clock.now())
     }

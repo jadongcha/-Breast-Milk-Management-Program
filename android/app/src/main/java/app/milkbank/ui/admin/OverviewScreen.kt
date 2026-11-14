@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,11 +46,24 @@ private val LowColor = Color(0xFFD9822B)
 private val BedW: Dp = 72.dp
 private val StatusW: Dp = 64.dp
 
-private fun statusMark(status: String) = when (status) {
-    "empty" -> "🔴"
-    "low" -> "🟠"
-    else -> "🟢"
-}
+@Composable
+private fun statusMark(status: String) = stringResource(
+    when (status) {
+        "empty" -> R.string.status_mark_empty
+        "low" -> R.string.status_mark_low
+        else -> R.string.status_mark_ok
+    },
+)
+
+/** What TalkBack says for the coloured mark. */
+@Composable
+private fun statusDesc(status: String) = stringResource(
+    when (status) {
+        "empty" -> R.string.status_desc_empty
+        "low" -> R.string.status_desc_low
+        else -> R.string.status_desc_ok
+    },
+)
 
 private fun statusColor(status: String) = when (status) {
     "empty" -> MilkbankColors.Error
@@ -138,11 +153,11 @@ private fun Summary(o: OverviewDto) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Text(
-                    stringResource(R.string.overview_today_in) + " " + packsMl(o.todayInPacks, o.todayInMl),
+                    stringResource(R.string.overview_today_in_value, packsMl(o.todayInPacks, o.todayInMl)),
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Text(
-                    stringResource(R.string.overview_today_use) + " " + packsMl(o.todayUsePacks, o.todayUseMl),
+                    stringResource(R.string.overview_today_use_value, packsMl(o.todayUsePacks, o.todayUseMl)),
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
@@ -209,7 +224,10 @@ private fun TableRow(r: OverviewRowDto, onClick: () -> Unit) {
             )
             Text(r.dailyAvg.oneDecimal(none), Modifier.weight(1f), style = st)
             Text(r.daysLeft.oneDecimal(none), Modifier.weight(1f), style = st)
-            Text(statusMark(r.status), Modifier.width(StatusW), style = st)
+            val markDesc = statusDesc(r.status)
+            Text(
+                statusMark(r.status), Modifier.width(StatusW).semantics { contentDescription = markDesc }, style = st,
+            )
             Text(
                 if (r.pendingPacks > 0) stringResource(R.string.packs, r.pendingPacks) else none,
                 Modifier.weight(1f), style = st,
@@ -221,16 +239,21 @@ private fun TableRow(r: OverviewRowDto, onClick: () -> Unit) {
 @Composable
 private fun CardRow(r: OverviewRowDto, onClick: () -> Unit) {
     val none = stringResource(R.string.value_none)
-    val pending = if (r.pendingPacks > 0) {
-        " · " + stringResource(R.string.col_pending) + " " + stringResource(R.string.packs, r.pendingPacks)
+    val detail = if (r.pendingPacks > 0) {
+        stringResource(R.string.overview_row_detail_pending, r.dailyAvg.oneDecimal(none), r.daysLeft.oneDecimal(none), r.pendingPacks)
     } else {
-        ""
+        stringResource(R.string.overview_row_detail, r.dailyAvg.oneDecimal(none), r.daysLeft.oneDecimal(none))
     }
+    val markDesc = statusDesc(r.status)
     MilkCard(Modifier.clickable(onClick = onClick)) {
         Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    statusMark(r.status) + " " + r.bed, style = MaterialTheme.typography.titleMedium,
+                    statusMark(r.status), Modifier.semantics { contentDescription = markDesc },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    r.bed, Modifier.padding(start = 6.dp), style = MaterialTheme.typography.titleMedium,
                     color = statusColor(r.status),
                 )
                 Text(
@@ -240,8 +263,7 @@ private fun CardRow(r: OverviewRowDto, onClick: () -> Unit) {
                 Text(stringResource(R.string.packs, r.balance), style = MaterialTheme.typography.titleMedium)
             }
             Text(
-                stringResource(R.string.col_daily_avg) + " " + r.dailyAvg.oneDecimal(none) + " · " +
-                    stringResource(R.string.col_days_left) + " " + r.daysLeft.oneDecimal(none) + pending,
+                detail,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
