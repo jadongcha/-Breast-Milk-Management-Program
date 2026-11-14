@@ -16,6 +16,7 @@ sealed interface Route
 @Serializable data object Staff : Route
 @Serializable data object Stations : Route
 @Serializable data object AdminOverview : Route
+@Serializable data object AdminDaily : Route
 @Serializable data object AdminSettings : Route
 @Serializable data object GuardianHome : Route
 

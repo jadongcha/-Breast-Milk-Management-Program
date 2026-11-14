@@ -121,10 +121,10 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
     }
 }
 
-/** Material3 DatePicker works in UTC midnights; the picked calendar date is read back in UTC, so it is zone-independent. */
+/** Also used by the daily-usage screen for any date. Material3 DatePicker works in UTC midnights; the picked calendar date is read back in UTC, so it is zone-independent. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AdmittedOnPicker(current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun AdmittedOnPicker(current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val initial = runCatching { LocalDate.parse(current) }.getOrNull()
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),

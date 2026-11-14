@@ -20,6 +20,8 @@ import androidx.compose.ui.res.stringResource
 import app.milkbank.MilkbankApp
 import app.milkbank.R
 import app.milkbank.core.SystemClock
+import app.milkbank.ui.admin.DailyScreen
+import app.milkbank.ui.admin.DailyViewModel
 import app.milkbank.ui.admin.PatientFormScreen
 import app.milkbank.ui.admin.PatientFormViewModel
 import app.milkbank.ui.admin.OverviewScreen
@@ -163,6 +165,24 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
                 vm, onBack = { navController.popBackStack() },
                 onOpenPatient = { navController.navigate(PatientDetail(it)) },
             )
+        }
+        composable<AdminDaily> {
+            val container = (LocalContext.current.applicationContext as MilkbankApp).container
+            val unexpected = stringResource(R.string.network_error)
+            val rangeError = stringResource(R.string.csv_range_error)
+            val startAfterEnd = stringResource(R.string.csv_start_after_end)
+            val saved = stringResource(R.string.csv_saved)
+            val vm: DailyViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        DailyViewModel(
+                            { container.admin }, SystemClock, rangeError, startAfterEnd, saved, unexpected,
+                            logUnexpected("daily failed"),
+                        )
+                    }
+                },
+            )
+            DailyScreen(vm, onBack = { navController.popBackStack() })
         }
         composable<AdminSettings> {
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
