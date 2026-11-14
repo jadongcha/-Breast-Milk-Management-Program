@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -51,6 +52,7 @@ fun PatientListContent(
     pendingViewModel: PendingViewModel,
     onSelect: (PatientDto) -> Unit,
     modifier: Modifier = Modifier,
+    showIncludeDischarged: Boolean = false,
 ) {
     val patients by viewModel.patients.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -59,6 +61,7 @@ fun PatientListContent(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val match by viewModel.match.collectAsStateWithLifecycle()
     val listMatch by viewModel.listMatch.collectAsStateWithLifecycle()
+    val includeDischarged by viewModel.includeDischarged.collectAsStateWithLifecycle()
     val last by viewModel.lastResult.collectAsStateWithLifecycle()
     var pendingOpen by rememberSaveable { mutableStateOf(true) }
 
@@ -153,6 +156,14 @@ fun PatientListContent(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) { Text(stringResource(R.string.all_babies, patients.size)) }
             }
+            if (showIncludeDischarged) {
+                item {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.include_discharged), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Switch(checked = includeDischarged, onCheckedChange = viewModel::setIncludeDischarged)
+                    }
+                }
+            }
             items(shown, key = { it.id }) { p -> BabyRow(p) { onSelect(p) } }
         }
     }
@@ -166,6 +177,14 @@ private fun BabyRow(p: PatientDto, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(p.regNo, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (p.status != "admitted") {
+                Text(
+                    stringResource(R.string.discharged_badge),
+                    Modifier.padding(end = 12.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (p.erasedAt != null) {
                 Text(
                     stringResource(R.string.erased_badge),

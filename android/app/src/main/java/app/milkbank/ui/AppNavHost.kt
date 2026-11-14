@@ -117,13 +117,15 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val container = (LocalContext.current.applicationContext as MilkbankApp).container
             val id = entry.toRoute<PatientForm>().id
             val unexpected = stringResource(R.string.network_error)
+            val unsaved = stringResource(R.string.unsaved_changes_first)
             val vm: PatientFormViewModel = viewModel(
                 key = "patient-form-$id",
                 factory = viewModelFactory {
                     initializer {
                         PatientFormViewModel(
                             id, { container.patients }, { container.admin }, container.resultBanner, SystemClock, unexpected,
-                            logUnexpected("patient form failed"),
+                            unsavedChangesMessage = unsaved,
+                            onError = logUnexpected("patient form failed"),
                         )
                     }
                 },

@@ -39,6 +39,21 @@ class PatientListViewModelTest {
         assertFalse(v.loading.value)
     }
 
+    @Test fun refresh_defaultsToAdmittedOnly() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        assertEquals(listOf(false), repo.listIncludeDischarged)
+        assertFalse(v.includeDischarged.value)
+    }
+
+    @Test fun includeDischargedSwitch_requestsDischargedAndExpands_thenOffRestores() = runTest {
+        val v = vm(); v.refresh(); advanceUntilIdle()
+        v.setIncludeDischarged(true); advanceUntilIdle()
+        assertEquals(listOf(false, true), repo.listIncludeDischarged)
+        assertTrue(v.expanded.value)
+        v.setIncludeDischarged(false); advanceUntilIdle()
+        assertEquals(listOf(false, true, false), repo.listIncludeDischarged)
+    }
+
     @Test fun refresh_error_isShown_andKeepsOldList() = runTest {
         val v = vm(); v.refresh(); advanceUntilIdle()
         repo.listHandler = { ApiResult.Err(ApiError(null, "서버에 연결할 수 없습니다")) }

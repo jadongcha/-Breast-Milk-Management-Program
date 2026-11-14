@@ -67,6 +67,7 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
     val erased by viewModel.erased.collectAsStateWithLifecycle()
     val canDischarge by viewModel.canDischarge.collectAsStateWithLifecycle()
     val canErase by viewModel.canErase.collectAsStateWithLifecycle()
+    val loadedRegNo by viewModel.loadedRegNo.collectAsStateWithLifecycle()
     val balance by viewModel.balance.collectAsStateWithLifecycle()
     val dischargeDialog by viewModel.dischargeDialog.collectAsStateWithLifecycle()
     val eraseDialog by viewModel.eraseDialog.collectAsStateWithLifecycle()
@@ -150,13 +151,13 @@ fun PatientFormScreen(viewModel: PatientFormViewModel, editing: Boolean, onDone:
 
     if (dischargeDialog) {
         DischargeDialog(
-            regNo = form.regNo, balance = balance, submitting = submitting, online = online,
+            regNo = loadedRegNo, balance = balance, submitting = submitting, online = online,
             onConfirm = viewModel::discharge, onDismiss = viewModel::closeDischarge,
         )
     }
     if (eraseDialog) {
         EraseDialog(
-            regNo = form.regNo, submitting = submitting, online = online,
+            regNo = loadedRegNo, submitting = submitting, online = online,
             onConfirm = viewModel::erase, onDismiss = viewModel::closeErase,
         )
     }

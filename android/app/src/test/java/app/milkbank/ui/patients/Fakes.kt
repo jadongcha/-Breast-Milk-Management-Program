@@ -44,7 +44,11 @@ class FakePatientRepository : PatientRepository {
     var listCalls = 0
     var detailCalls = 0
 
-    override suspend fun list(q: String?): ApiResult<List<PatientDto>> { listCalls++; return listHandler(q) }
+    val listIncludeDischarged = mutableListOf<Boolean>()
+
+    override suspend fun list(q: String?, includeDischarged: Boolean): ApiResult<List<PatientDto>> {
+        listCalls++; listIncludeDischarged += includeDischarged; return listHandler(q)
+    }
     override suspend fun detail(id: Int): ApiResult<PatientDetailDto> { detailCalls++; return detailHandler(id) }
     override suspend fun create(form: PatientForm): ApiResult<PatientDto> { createdForms += form; return createHandler(form) }
     override suspend fun update(id: Int, form: PatientForm): ApiResult<PatientDto> { updatedForms += id to form; return updateHandler(id, form) }

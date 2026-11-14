@@ -29,6 +29,9 @@ class PatientListViewModel(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
     private val _expanded = MutableStateFlow(false)
     val expanded: StateFlow<Boolean> = _expanded.asStateFlow()
+    private val _includeDischarged = MutableStateFlow(false)
+    /** Admin-only switch: also list discharged babies. */
+    val includeDischarged: StateFlow<Boolean> = _includeDischarged.asStateFlow()
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
     private val _match = MutableStateFlow<BabyMatch>(BabyMatch.Empty)
@@ -49,6 +52,13 @@ class PatientListViewModel(
 
     fun toggleExpanded() {
         _expanded.value = !_expanded.value
+    }
+
+    fun setIncludeDischarged(on: Boolean) {
+        if (_includeDischarged.value == on) return
+        _includeDischarged.value = on
+        if (on) _expanded.value = true
+        refresh()
     }
 
     fun onQueryChange(q: String) {
@@ -75,7 +85,7 @@ class PatientListViewModel(
         _loading.value = true
         refreshJob = viewModelScope.launch {
             try {
-                when (val r = patientRepo().list(null)) {
+                when (val r = patientRepo().list(null, _includeDischarged.value)) {
                     is ApiResult.Ok -> {
                         _patients.value = r.value
                         _error.value = null

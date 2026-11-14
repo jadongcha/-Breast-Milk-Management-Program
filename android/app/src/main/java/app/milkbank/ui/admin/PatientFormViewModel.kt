@@ -42,6 +42,7 @@ class PatientFormViewModel(
     private val banner: ResultBannerStore,
     clock: Clock,
     private val unexpectedError: String = "",
+    private val unsavedChangesMessage: String = "",
     private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _form = MutableStateFlow(
@@ -74,6 +75,11 @@ class PatientFormViewModel(
     private val _balance = MutableStateFlow(0)
     val balance: StateFlow<Int> = _balance.asStateFlow()
 
+    /** The registration number as loaded from the server; the confirm dialogs show this, never the editable field. */
+    private val _loadedRegNo = MutableStateFlow("")
+    val loadedRegNo: StateFlow<String> = _loadedRegNo.asStateFlow()
+    private var loadedForm: PatientFormState? = null
+
     private var existing: PatientDetailDto? = null
 
     init {
@@ -88,10 +94,13 @@ class PatientFormViewModel(
                         existing = r.value
                         refreshActions()
                         _balance.value = r.value.balance
-                        _form.value = PatientFormState(
+                        val loaded = PatientFormState(
                             r.value.regNo, r.value.babyName, r.value.bed,
                             r.value.guardianName, r.value.guardianPhone, r.value.admittedOn,
                         )
+                        loadedForm = loaded
+                        _loadedRegNo.value = r.value.regNo
+                        _form.value = loaded
                     }
                     is ApiResult.Err -> _error.value = r.error.message
                 }
@@ -115,9 +124,18 @@ class PatientFormViewModel(
         _canErase.value = discharged && !erased
     }
 
-    fun openDischarge() { if (_canDischarge.value) _dischargeDialog.value = true }
+    /** Discharge/erase act on the saved patient, so unsaved edits must be saved or reverted first. */
+    private fun hasUnsavedChanges(): Boolean = loadedForm != null && _form.value != loadedForm
+
+    private fun blockedByUnsavedChanges(): Boolean {
+        if (!hasUnsavedChanges()) return false
+        _error.value = unsavedChangesMessage
+        return true
+    }
+
+    fun openDischarge() { if (_canDischarge.value && !blockedByUnsavedChanges()) _dischargeDialog.value = true }
     fun closeDischarge() { _dischargeDialog.value = false }
-    fun openErase() { if (_canErase.value) _eraseDialog.value = true }
+    fun openErase() { if (_canErase.value && !blockedByUnsavedChanges()) _eraseDialog.value = true }
     fun closeErase() { _eraseDialog.value = false }
 
     /** [remaining] is "return" or "discard"; a discard needs one of the known reasons. */

@@ -55,7 +55,8 @@ interface AuthRepository {
 }
 
 interface PatientRepository {
-    suspend fun list(q: String?): ApiResult<List<PatientDto>>
+    /** [includeDischarged] is for the admin list; nurses never set it. */
+    suspend fun list(q: String?, includeDischarged: Boolean = false): ApiResult<List<PatientDto>>
     suspend fun detail(id: Int): ApiResult<PatientDetailDto>
     suspend fun create(form: PatientForm): ApiResult<PatientDto>
     suspend fun update(id: Int, form: PatientForm): ApiResult<PatientDto>
@@ -149,7 +150,8 @@ private fun pinnedApi(config: ServerConfig): Pair<MilkbankApi, OkHttpClient> {
 }
 
 class HttpPatientRepository(private val api: MilkbankApi?, private val networkError: String) : PatientRepository {
-    override suspend fun list(q: String?) = api.call(networkError) { it.patients(q?.takeIf { s -> s.isNotBlank() }) }
+    override suspend fun list(q: String?, includeDischarged: Boolean) =
+        api.call(networkError) { it.patients(q?.takeIf { s -> s.isNotBlank() }, includeDischarged.takeIf { b -> b }) }
     override suspend fun detail(id: Int) = api.call(networkError) { it.patient(id) }
     override suspend fun create(form: PatientForm) = api.call(networkError) { it.createPatient(form) }
     override suspend fun update(id: Int, form: PatientForm) = api.call(networkError) { it.updatePatient(id, form) }

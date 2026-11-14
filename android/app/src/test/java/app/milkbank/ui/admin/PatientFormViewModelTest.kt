@@ -38,7 +38,7 @@ class PatientFormViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(StandardTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm(id: Int? = null) = PatientFormViewModel(id, { repo }, { admin }, banner, clock, "서버에 연결할 수 없습니다")
+    private fun vm(id: Int? = null) = PatientFormViewModel(id, { repo }, { admin }, banner, clock, "서버에 연결할 수 없습니다", "저장 먼저")
 
     private fun PatientFormViewModel.fill() {
         setRegNo("DEMO-9"); setBabyName("김아기"); setBed("4"); setGuardianName("박보호"); setGuardianPhone("01012345678")
@@ -190,6 +190,34 @@ class PatientFormViewModelTest {
         assertFalse(v.saved.value)
         assertFalse(v.dischargeDialog.value)
         assertNull(banner.last.value)
+    }
+
+    @Test fun unsavedEdit_blocksDischargeDialog_andShowsMessage() = runTest {
+        loaded()
+        val v = vm(7); advanceUntilIdle()
+        v.setRegNo("OTHER-9")
+        v.openDischarge()
+        assertFalse(v.dischargeDialog.value)
+        assertEquals("저장 먼저", v.error.value)
+    }
+
+    @Test fun unsavedEdit_blocksEraseDialog() = runTest {
+        loaded(status = "discharged")
+        val v = vm(7); advanceUntilIdle()
+        v.setBed("99")
+        v.openErase()
+        assertFalse(v.eraseDialog.value)
+        assertEquals("저장 먼저", v.error.value)
+    }
+
+    @Test fun dialogs_carryLoadedRegNo_notTheEditedField() = runTest {
+        loaded()
+        val v = vm(7); advanceUntilIdle()
+        assertEquals("DEMO-1", v.loadedRegNo.value)
+        v.setRegNo("OTHER-9"); v.setRegNo("DEMO-1") // edited then reverted: allowed
+        v.openDischarge()
+        assertTrue(v.dischargeDialog.value)
+        assertEquals("DEMO-1", v.loadedRegNo.value)
     }
 
     @Test fun dialogs_openAndClose_onlyWhenAllowed() = runTest {

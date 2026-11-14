@@ -231,8 +231,12 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                     PatientListContent(
                         listVm,
                         pendingVm,
-                        onSelect = { selectedId = it.id },
+                        onSelect = { p ->
+                            if (isAdmin && p.status != "admitted") navController.navigate(PatientForm(p.id))
+                            else selectedId = p.id
+                        },
                         modifier = Modifier.width(total * 0.4f).fillMaxHeight(),
+                        showIncludeDischarged = isAdmin,
                     )
                     Box(Modifier.weight(1f).fillMaxHeight().background(MilkbankColors.Background)) {
                         val id = selectedId
@@ -255,7 +259,14 @@ fun PatientsPane(container: AppContainer, navController: NavHostController) {
                     }
                 }
             } else {
-                PatientListContent(listVm, pendingVm, onSelect = { navController.navigate(PatientDetail(it.id)) { launchSingleTop = true } })
+                PatientListContent(
+                    listVm, pendingVm,
+                    onSelect = { p ->
+                        if (isAdmin && p.status != "admitted") navController.navigate(PatientForm(p.id))
+                        else navController.navigate(PatientDetail(p.id)) { launchSingleTop = true }
+                    },
+                    showIncludeDischarged = isAdmin,
+                )
             }
         }
     }

@@ -19,7 +19,11 @@ interface MilkbankApi {
     @POST("auth/password") suspend fun changePassword(@Body body: PasswordChangeRequest)
     @GET("auth/me") suspend fun me(): StaffDto
 
-    @GET("patients") suspend fun patients(@Query("q") q: String?): List<PatientDto>
+    @GET("patients")
+    suspend fun patients(
+        @Query("q") q: String?,
+        @Query("include_discharged") includeDischarged: Boolean?,
+    ): List<PatientDto>
     @GET("patients/{id}") suspend fun patient(@Path("id") id: Int): PatientDetailDto
     @POST("patients") suspend fun createPatient(@Body body: PatientForm): PatientDto
     @PATCH("patients/{id}")
