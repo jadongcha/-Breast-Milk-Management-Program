@@ -169,6 +169,9 @@ class PatientDetailViewModel(
         else s.copy(picking = s.chosenPackIds ?: emptyList())
     }
 
+    /** [취소] in the pack list: back to the use/discard window with count, reason, memo and an earlier choice kept. */
+    fun cancelChoosePacks() = editDialog { it.copy(picking = null) }
+
     fun togglePack(id: Int) = editDialog { s ->
         val picking = s.picking
         val count = s.count

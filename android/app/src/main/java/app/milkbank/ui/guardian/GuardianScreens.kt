@@ -3,6 +3,7 @@ package app.milkbank.ui.guardian
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -24,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
@@ -50,12 +54,18 @@ private fun GuardianButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     outlined: Boolean = false,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val m = modifier.heightIn(min = BUTTON_MIN_HEIGHT)
     if (outlined) {
-        OutlinedButton(onClick, m, enabled = enabled) { Text(text, style = MaterialTheme.typography.titleLarge) }
+        OutlinedButton(onClick, m, enabled = enabled, contentPadding = contentPadding) {
+            Text(text, style = MaterialTheme.typography.titleLarge, maxLines = maxLines)
+        }
     } else {
-        Button(onClick, m, enabled = enabled) { Text(text, style = MaterialTheme.typography.titleLarge) }
+        Button(onClick, m, enabled = enabled, contentPadding = contentPadding) {
+            Text(text, style = MaterialTheme.typography.titleLarge, maxLines = maxLines)
+        }
     }
 }
 
@@ -190,7 +200,12 @@ private fun PickStep(
     for (row in listOf(1..5, 6..10)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             for (n in row) {
-                GuardianButton(n.toString(), { vm.pickCount(n) }, Modifier.weight(1f), outlined = n != count)
+                // Five buttons per row: little side padding keeps "10" on one line; the semantics tell TalkBack which is picked.
+                GuardianButton(
+                    n.toString(), { vm.pickCount(n) },
+                    Modifier.weight(1f).semantics { selected = n == count },
+                    outlined = n != count, contentPadding = PaddingValues(horizontal = 4.dp), maxLines = 1,
+                )
             }
         }
     }

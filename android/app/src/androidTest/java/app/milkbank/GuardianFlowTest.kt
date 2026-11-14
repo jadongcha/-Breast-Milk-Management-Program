@@ -109,7 +109,7 @@ class GuardianFlowTest {
         waitForText("팩 3 (mL)")
         rule.onNode(hasText("제출") and hasClickAction() and hasAnyAncestor(isDialog()).not()).performClick()
 
-        waitForText("$FAKE_REG_NO 아기 모유 3팩을 제출합니다")
+        waitForText("$FAKE_REG_NO 아기 모유를 제출합니다: 3팩")
         assertNameNotShown()
         rule.onNode(hasText("제출") and inDialog).performClick()
 
@@ -136,7 +136,7 @@ class GuardianFlowTest {
         submit.performScrollTo()
         submit.performClick()
 
-        waitForText("$FAKE_REG_NO 아기 모유 10팩을 제출합니다")
+        waitForText("$FAKE_REG_NO 아기 모유를 제출합니다: 10팩")
         rule.onNode(hasText("제출") and inDialog).performClick()
         waitForText("제출 접수 완료")
     }

@@ -7,6 +7,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PackMlsTest {
+    @Test fun resize_toANewCount_clearsTheAllField_sameCountKeepsIt() {
+        val s = PackMlsState.empty(3).setAll("90")
+        assertEquals("90", s.resize(3).allText)
+        val grown = s.resize(4)
+        assertEquals("", grown.allText)
+        assertEquals(listOf("90", "90", "90", ""), grown.texts)
+        assertEquals("", s.resize(2).allText)
+    }
+
     @Test fun resize_keepsLeadingValues() {
         val s = PackMlsState(listOf("80", "90"))
         assertEquals(listOf("80", "90", ""), s.resize(3).texts)

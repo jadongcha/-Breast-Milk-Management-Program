@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -38,9 +39,10 @@ fun parsePackMl(text: String): ParsedPackMl {
  * Plain strings so the fields keep exactly what was typed; [values] is what to send.
  */
 data class PackMlsState(val texts: List<String>, val allText: String = "") {
-    /** Follows the pack count: keeps the leading fields, new ones are blank. */
+    /** Follows the pack count: keeps the leading fields, new ones are blank; a changed count clears the "all" field. */
     fun resize(count: Int): PackMlsState =
-        copy(texts = List(count) { texts.getOrElse(it) { "" } })
+        if (count == texts.size) this
+        else copy(texts = List(count) { texts.getOrElse(it) { "" } }, allText = "")
 
     fun setAt(i: Int, text: String): PackMlsState =
         copy(texts = texts.mapIndexed { idx, old -> if (idx == i) text else old })
@@ -83,7 +85,7 @@ fun PackMlFields(state: PackMlsState, onChange: (PackMlsState) -> Unit, minHeigh
     Column(modifier) {
         PackMlField(
             state.allText, { onChange(state.setAll(it)) }, stringResource(R.string.pack_ml_all_label),
-            invalid = state.allInvalid, minHeight = minHeight, enabled = enabled,
+            invalid = state.allInvalid, minHeight = minHeight, enabled = enabled, imeAction = ImeAction.Next,
         )
         Text(
             stringResource(R.string.pack_ml_hint), style = MaterialTheme.typography.bodyMedium,
@@ -93,6 +95,7 @@ fun PackMlFields(state: PackMlsState, onChange: (PackMlsState) -> Unit, minHeigh
             PackMlField(
                 text, { onChange(state.setAt(i, it)) }, stringResource(R.string.pack_ml_label, i + 1),
                 invalid = i in state.invalidIndexes, minHeight = minHeight, enabled = enabled,
+                imeAction = if (i == state.texts.lastIndex) ImeAction.Done else ImeAction.Next,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
@@ -102,13 +105,13 @@ fun PackMlFields(state: PackMlsState, onChange: (PackMlsState) -> Unit, minHeigh
 @Composable
 private fun PackMlField(
     text: String, onChange: (String) -> Unit, label: String, invalid: Boolean, minHeight: Dp, enabled: Boolean,
-    modifier: Modifier = Modifier,
+    imeAction: ImeAction, modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
         IdleTextField(
             text, onChange, label, Modifier.fillMaxWidth().heightIn(min = minHeight),
             enabled = enabled, isError = invalid,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = imeAction),
         )
         if (invalid) {
             Text(stringResource(R.string.pack_ml_range_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)

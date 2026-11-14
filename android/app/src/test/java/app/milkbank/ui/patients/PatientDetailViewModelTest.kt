@@ -143,6 +143,17 @@ class PatientDetailViewModelTest {
         assertEquals(listOf(3, 4), v.dialog.value!!.previewPacks.map { it.id })
     }
 
+    @Test fun cancelChoosePacks_goesBackToTheWindowKeepingTheInput() = runTest {
+        val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
+        v.openDialog("discard"); v.setCount(2); v.setReason("contaminated"); v.setMemo("메모")
+        v.openChoosePacks(); v.togglePack(3)
+        v.cancelChoosePacks()
+        val d = v.dialog.value!!
+        assertFalse(d.choosing)
+        assertEquals(2, d.count); assertEquals("contaminated", d.reason); assertEquals("메모", d.memo)
+        assertNull(d.chosenPackIds)
+    }
+
     @Test fun choosePacks_untickingFreesASlot() = runTest {
         val v = vmWithPacks(); v.refresh(); advanceUntilIdle()
         v.openDialog("use"); v.setCount(1)

@@ -176,7 +176,7 @@ private fun PacksToGo(state: StockDialogState, vm: PatientDetailViewModel) {
 @Composable
 private fun ChoosePacksDialog(state: StockDialogState, packs: List<PackDto>, vm: PatientDetailViewModel) {
     val picking = state.picking.orEmpty()
-    DialogShell(vm::closeDialog) {
+    DialogShell(vm::cancelChoosePacks) {
         Text(stringResource(R.string.choose_packs), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(stringResource(R.string.packs, state.count ?: 0), style = MaterialTheme.typography.titleMedium)
         packs.forEach { pk ->
@@ -193,7 +193,7 @@ private fun ChoosePacksDialog(state: StockDialogState, packs: List<PackDto>, vm:
                 )
             }
         }
-        DialogButtons(stringResource(R.string.choose_packs_done), picking.size == state.count, vm::closeDialog, vm::finishChoosePacks)
+        DialogButtons(stringResource(R.string.choose_packs_done), picking.size == state.count, vm::cancelChoosePacks, vm::finishChoosePacks)
     }
 }
 
