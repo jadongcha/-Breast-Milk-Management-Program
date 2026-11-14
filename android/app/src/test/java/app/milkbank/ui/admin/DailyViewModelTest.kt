@@ -32,14 +32,18 @@ private class DailyRepo : AdminRepository {
     val seriesCalls = mutableListOf<Pair<Int, Int?>>()
     val exportCalls = mutableListOf<Pair<String, String>>()
     var exportResult: ApiResult<ByteArray> = ApiResult.Ok(byteArrayOf(1, 2, 3))
+    var dailyFail: Boolean = false
+    var seriesFail: Boolean = false
 
     override suspend fun daily(date: String?): ApiResult<DailyDto> {
         dailyCalls += date
+        if (dailyFail) return ApiResult.Err(ApiError(500, "일별 실패"))
         return ApiResult.Ok(DailyDto(date ?: "", emptyList(), DailyTotalDto(0, null, 0, null, 0, null, 0)))
     }
 
     override suspend fun series(days: Int, patientId: Int?): ApiResult<List<SeriesPointDto>> {
         seriesCalls += days to patientId
+        if (seriesFail) return ApiResult.Err(ApiError(500, "차트 실패"))
         return ApiResult.Ok(listOf(SeriesPointDto("2026-11-14", 1, 2, null, 0)))
     }
 
@@ -69,7 +73,7 @@ class DailyViewModelTest {
     private fun vm() = DailyViewModel(
         { repo }, clock, csvRangeError = "기간은 92일 이하로 골라 주세요",
         startAfterEnd = "시작일이 종료일보다 늦습니다", csvSaved = "CSV 파일을 저장했습니다",
-        unexpectedError = "서버에 연결할 수 없습니다",
+        unexpectedError = "서버에 연결할 수 없습니다", csvWriteError = "파일을 저장하지 못했습니다",
     )
 
     @Test fun defaultDate_isTodayInKst() {
@@ -165,11 +169,42 @@ class DailyViewModelTest {
         assertTrue(!wrote)
     }
 
-    @Test fun export_writeFails_showsUnexpected() = runTest {
+    @Test fun failedDailyForNewDate_clearsTable_andShowsError() = runTest {
+        val v = vm(); v.load(); advanceUntilIdle()
+        assertEquals("2026-11-15", v.daily.value?.date)
+        repo.dailyFail = true
+        v.setDate(LocalDate.parse("2026-11-01"))
+        assertNull(v.daily.value) // cleared immediately, before the load finishes
+        advanceUntilIdle()
+        assertNull(v.daily.value)
+        assertEquals("일별 실패", v.dailyError.value)
+    }
+
+    @Test fun failedSeriesAfterSuccessfulDaily_keepsChartError() = runTest {
+        val v = vm(); v.load(); advanceUntilIdle()
+        repo.seriesFail = true
+        v.setPatient(3); advanceUntilIdle()
+        assertTrue(v.series.value.isEmpty())
+        assertEquals("차트 실패", v.seriesError.value)
+        v.setDate(LocalDate.parse("2026-11-01")); advanceUntilIdle() // a daily success
+        assertEquals("차트 실패", v.seriesError.value)
+        assertNull(v.dailyError.value)
+    }
+
+    @Test fun changingChartSelection_dropsOldBarsAtOnce() = runTest {
+        val v = vm(); v.load(); advanceUntilIdle()
+        assertTrue(v.series.value.isNotEmpty())
+        v.setPatient(3)
+        assertTrue(v.series.value.isEmpty())
+        advanceUntilIdle()
+        assertTrue(v.series.value.isNotEmpty())
+    }
+
+    @Test fun export_writeFails_showsWriteError() = runTest {
         val v = vm()
         v.export(LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-14")) { throw java.io.IOException("disk") }
         advanceUntilIdle()
-        assertEquals("서버에 연결할 수 없습니다", v.error.value)
+        assertEquals("파일을 저장하지 못했습니다", v.error.value)
         assertNull(v.notice.value)
     }
 }

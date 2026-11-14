@@ -174,12 +174,13 @@ fun AppNavHost(navController: NavHostController, start: Route, modifier: Modifie
             val rangeError = stringResource(R.string.csv_range_error)
             val startAfterEnd = stringResource(R.string.csv_start_after_end)
             val saved = stringResource(R.string.csv_saved)
+            val writeError = stringResource(R.string.csv_write_error)
             val vm: DailyViewModel = viewModel(
                 factory = viewModelFactory {
                     initializer {
                         DailyViewModel(
                             { container.admin }, SystemClock, rangeError, startAfterEnd, saved, unexpected,
-                            logUnexpected("daily failed"),
+                            writeError, logUnexpected("daily failed"),
                         )
                     }
                 },

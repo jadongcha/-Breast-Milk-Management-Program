@@ -72,6 +72,8 @@ fun DailyScreen(viewModel: DailyViewModel, onBack: () -> Unit) {
     val selectedBar by viewModel.selectedBar.collectAsStateWithLifecycle()
     val babies by viewModel.babies.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val dailyError by viewModel.dailyError.collectAsStateWithLifecycle()
+    val seriesError by viewModel.seriesError.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -123,23 +125,28 @@ fun DailyScreen(viewModel: DailyViewModel, onBack: () -> Unit) {
                 OutlinedButton(onClick = { pickingDate = true }, modifier = MinButton) { Text(date.toString()) }
             }
 
+            dailyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge) }
             DailyTable(daily)
 
             Text(stringResource(R.string.chart_title), style = MaterialTheme.typography.titleMedium)
             ChartControls(days, patientId, babies, viewModel::setDays, viewModel::setPatient)
+            seriesError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge) }
             if (series.isNotEmpty()) {
                 BarChart(
                     values = series.map { it.usePacks },
                     labels = series.map { it.day.takeLast(5) },
-                    descriptions = series.map { stringResource(R.string.packs, it.usePacks) },
+                    descriptions = series.map { stringResource(R.string.chart_bar_desc, it.day.takeLast(5), it.usePacks) },
                     selected = selectedBar,
                     onSelect = viewModel::selectBar,
                 )
                 selectedBar?.let { i ->
                     series.getOrNull(i)?.let { p ->
-                        val ml = p.useMl?.let { " · " + stringResource(R.string.chart_bar_use_ml, it) }.orEmpty()
                         Text(
-                            stringResource(R.string.chart_bar_detail, p.day, p.inPacks, p.usePacks, p.discardPacks) + ml,
+                            if (p.useMl != null) {
+                                stringResource(R.string.chart_bar_detail_ml, p.day, p.inPacks, p.usePacks, p.discardPacks, p.useMl)
+                            } else {
+                                stringResource(R.string.chart_bar_detail, p.day, p.inPacks, p.usePacks, p.discardPacks)
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }

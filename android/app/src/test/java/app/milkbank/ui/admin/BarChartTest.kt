@@ -12,6 +12,18 @@ class BarChartTest {
         assertEquals(listOf(0f, 0f, 0f), barFractions(listOf(0, 0, 0)))
     }
 
+    @Test fun thinLabels_30days_keepsEveryFifth() {
+        val labels = (1..30).map { "d$it" }
+        val out = thinLabels(labels, 5)
+        assertEquals(30, out.size)
+        assertEquals(listOf("d1", "d6", "d11", "d16", "d21", "d26"), out.filter { it.isNotEmpty() })
+    }
+
+    @Test fun thinLabels_7days_untouched() {
+        val labels = (1..7).map { "d$it" }
+        assertEquals(labels, thinLabels(labels, 5))
+    }
+
     @Test fun barFractions_empty() {
         assertEquals(emptyList<Float>(), barFractions(emptyList()))
     }

@@ -2,6 +2,10 @@ package app.milkbank.ui.admin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +32,12 @@ fun barFractions(values: List<Int>): List<Float> {
     return if (max <= 0) values.map { 0f } else values.map { it.toFloat() / max }
 }
 
+/** Keeps every [every]th label (the first, then each Nth) and blanks the rest; short lists are left alone. */
+fun thinLabels(labels: List<String>, every: Int): List<String> =
+    if (labels.size <= 10 || every <= 1) labels else labels.mapIndexed { i, l -> if (i % every == 0) l else "" }
+
+private val MinColumnWidth = 26.dp
+
 /** One tappable bar per value; [selected] is highlighted. The whole column is the tap target. */
 @Composable
 fun BarChart(
@@ -39,10 +49,19 @@ fun BarChart(
     modifier: Modifier = Modifier,
 ) {
     val fractions = barFractions(values)
-    Row(modifier.fillMaxWidth().height(180.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    val shown = thinLabels(labels, 5)
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // Wide enough columns share the width; with many bars the chart scrolls instead of squeezing them.
+        val gap = 2.dp
+        val fit = (maxWidth - gap * (fractions.size - 1).coerceAtLeast(0)) / fractions.size.coerceAtLeast(1)
+        val colWidth = if (fit < MinColumnWidth) MinColumnWidth else fit
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+        ) {
         fractions.forEachIndexed { i, f ->
             Column(
-                Modifier.weight(1f).fillMaxHeight()
+                Modifier.width(colWidth).fillMaxHeight()
                     .clickable { onSelect(i) }
                     .semantics { contentDescription = descriptions.getOrElse(i) { "" } },
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -61,10 +80,11 @@ fun BarChart(
                     )
                 }
                 Text(
-                    labels.getOrElse(i) { "" }, style = MaterialTheme.typography.labelSmall,
-                    textAlign = TextAlign.Center, maxLines = 1,
+                    shown.getOrElse(i) { "" }, style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
                 )
             }
+        }
         }
     }
 }

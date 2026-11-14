@@ -35,6 +35,7 @@ class DailyViewModel(
     private val startAfterEnd: String = "",
     private val csvSaved: String = "",
     private val unexpectedError: String = "",
+    private val csvWriteError: String = "",
     private val onError: (Throwable) -> Unit = {},
 ) : ViewModel() {
     private val _date = MutableStateFlow(todayKst(clock.now()))
@@ -52,7 +53,12 @@ class DailyViewModel(
     private val _babies = MutableStateFlow<List<ChartBaby>>(emptyList())
     val babies: StateFlow<List<ChartBaby>> = _babies.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
+    /** Export problems (range, server, file write). Load failures have their own states below. */
     val error: StateFlow<String?> = _error.asStateFlow()
+    private val _dailyError = MutableStateFlow<String?>(null)
+    val dailyError: StateFlow<String?> = _dailyError.asStateFlow()
+    private val _seriesError = MutableStateFlow<String?>(null)
+    val seriesError: StateFlow<String?> = _seriesError.asStateFlow()
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
@@ -76,11 +82,14 @@ class DailyViewModel(
         }
     }
 
-    fun setDate(date: LocalDate) { _date.value = date; loadDaily() }
+    /** The old table is dropped at once, so the new date never sits over another date's numbers. */
+    fun setDate(date: LocalDate) { _date.value = date; _daily.value = null; loadDaily() }
 
-    fun setDays(days: Int) { _days.value = days; _selectedBar.value = null; loadSeries() }
+    fun setDays(days: Int) { _days.value = days; _selectedBar.value = null; _series.value = emptyList(); loadSeries() }
 
-    fun setPatient(patientId: Int?) { _patientId.value = patientId; _selectedBar.value = null; loadSeries() }
+    fun setPatient(patientId: Int?) {
+        _patientId.value = patientId; _selectedBar.value = null; _series.value = emptyList(); loadSeries()
+    }
 
     /** Tapping the selected bar again clears the selection. */
     fun selectBar(index: Int?) { _selectedBar.value = if (index == _selectedBar.value) null else index }
@@ -90,10 +99,10 @@ class DailyViewModel(
     private fun loadDaily() {
         dailyJob?.cancel()
         dailyJob = viewModelScope.launch {
-            guarded {
+            guarded({ _dailyError.value = it; _daily.value = null }) {
                 when (val r = admin().daily(_date.value.toString())) {
-                    is ApiResult.Ok -> { _daily.value = r.value; _error.value = null }
-                    is ApiResult.Err -> _error.value = r.error.message
+                    is ApiResult.Ok -> { _daily.value = r.value; _dailyError.value = null }
+                    is ApiResult.Err -> { _daily.value = null; _dailyError.value = r.error.message }
                 }
             }
         }
@@ -102,10 +111,10 @@ class DailyViewModel(
     private fun loadSeries() {
         seriesJob?.cancel()
         seriesJob = viewModelScope.launch {
-            guarded {
+            guarded({ _seriesError.value = it; _series.value = emptyList() }) {
                 when (val r = admin().series(_days.value, _patientId.value)) {
-                    is ApiResult.Ok -> { _series.value = r.value; _error.value = null }
-                    is ApiResult.Err -> _error.value = r.error.message
+                    is ApiResult.Ok -> { _series.value = r.value; _seriesError.value = null }
+                    is ApiResult.Err -> { _series.value = emptyList(); _seriesError.value = r.error.message }
                 }
             }
         }
@@ -122,10 +131,19 @@ class DailyViewModel(
     fun export(from: LocalDate, to: LocalDate, write: suspend (ByteArray) -> Unit) {
         exportRange(from, to)?.let { _error.value = it; _notice.value = null; return }
         viewModelScope.launch {
-            guarded {
+            guarded({ _error.value = it; _notice.value = null }) {
                 when (val r = admin().exportCsv(from.toString(), to.toString())) {
                     is ApiResult.Ok -> {
-                        write(r.value)
+                        try {
+                            write(r.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            onError(e)
+                            _error.value = csvWriteError
+                            _notice.value = null
+                            return@guarded
+                        }
                         _error.value = null
                         _notice.value = csvSaved
                     }
@@ -144,15 +162,14 @@ class DailyViewModel(
         export(from, to) { bytes -> write(target, bytes) }
     }
 
-    private suspend fun guarded(block: suspend () -> Unit) {
+    private suspend fun guarded(fail: (String) -> Unit, block: suspend () -> Unit) {
         try {
             block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             onError(e)
-            _error.value = unexpectedError
-            _notice.value = null
+            fail(unexpectedError)
         }
     }
 }
