@@ -51,3 +51,8 @@ def test_exact_threshold_is_low_despite_float_rounding():
         avg_days=7, days_threshold=7,
     )
     assert j.status == "low"
+
+
+def test_divisor_is_avg_days_not_days_since_first_use():
+    j = _j(first_use_day=TODAY - timedelta(days=5), recent_use_packs=6, avg_days=3, balance=10)
+    assert (j.daily_avg, j.days_left) == (2.0, 5.0)

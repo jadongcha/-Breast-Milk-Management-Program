@@ -270,3 +270,23 @@ def test_erase_pass_truncates_wal(client, app, admin_token, world):
     with app.state.session_factory() as db:
         assert db.get(Patient, p).erased_at is not None
     assert not wal.exists() or wal.stat().st_size == 0
+
+
+def test_auto_erase_kst_midnight_boundary(client, app, admin_token, world):
+    p = world["p1"]
+    assert _discharge(client, admin_token, p).status_code == 200
+    d = date(2026, 11, 10)
+    with app.state.session_factory() as db:
+        db.get(Patient, p).discharged_on = d
+        db.commit()
+
+    def run(at):
+        with app.state.session_factory() as db:
+            ids = discharge_service.erase_due(db, FakeClock(at))
+            db.commit()
+            return ids
+
+    # D+29 UTC 14:59 = KST D+29 23:59 -> 아직. UTC 15:00 = KST D+30 00:00 -> 말소.
+    d29 = d + timedelta(days=29)
+    assert run(datetime(d29.year, d29.month, d29.day, 14, 59, tzinfo=UTC)) == []
+    assert run(datetime(d29.year, d29.month, d29.day, 15, 0, tzinfo=UTC)) == [p]

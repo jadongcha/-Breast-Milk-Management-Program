@@ -273,3 +273,31 @@ def test_confirm_links_intake_record(client, app, nurse_token, world):
         sub = db.get(Submission, sid)
         assert sub.intake_record_id == rec_id
         assert db.get(StockRecord, rec_id).kind == RecordKind.INTAKE
+
+
+def test_confirm_ml_range(client, nurse_token, world):
+    st = world["a"]
+    sid = _submit(client, st, _gtoken(client, st), world["p1"], 3).json()["submission"]["id"]
+    for ml in (0, 20001):
+        r = client.post(
+            f"/submissions/{sid}/confirm", json={"count": 3, "ml": ml}, headers=auth(nurse_token)
+        )
+        assert r.status_code == 400 and r.json()["detail"] == "용량은 1~20000mL 사이여야 합니다"
+    assert len(_pending(client, nurse_token)) == 1
+
+
+def test_reject_erased_patient_stores_no_memo(client, app, admin_token, nurse_token, world):
+    st = world["a"]
+    sid = _submit(client, st, _gtoken(client, st), world["p1"], 3).json()["submission"]["id"]
+    assert client.post(
+        f"/patients/{world['p1']}/discharge", json={"remaining": "return"}, headers=auth(admin_token)
+    ).status_code == 200
+    assert client.post(f"/patients/{world['p1']}/erase", headers=auth(admin_token)).status_code == 200
+    r = client.post(
+        f"/submissions/{sid}/reject", json={"reason": "other", "memo": "개인정보 메모"},
+        headers=auth(nurse_token),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["submission"]["memo"] is None
+    with app.state.session_factory() as db:
+        assert db.get(Submission, sid).memo is None

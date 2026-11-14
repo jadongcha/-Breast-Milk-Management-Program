@@ -134,6 +134,9 @@ def reject(
         raise BadRequest("기타 사유를 입력해 주세요")
     if memo is not None and len(memo) > 100:
         raise BadRequest("메모는 100자 이하로 입력해 주세요")
+    patient = db.get(Patient, sub.patient_id)
+    if patient is not None and patient.erased_at is not None:
+        memo = None  # 말소된 환자에게는 새 개인정보 메모를 남기지 않는다.
     sub.status = SubmissionStatus.REJECTED
     sub.reject_reason = reason
     sub.memo = memo

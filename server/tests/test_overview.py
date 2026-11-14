@@ -155,3 +155,63 @@ def test_patient_threshold_overrides(client, admin_token):
 
 def test_overview_admin_only(client, nurse_token):
     assert client.get("/admin/overview", headers=auth(nurse_token)).status_code == 403
+
+
+def _set_bed(app, pid, bed):
+    from milkbank.models import Patient
+
+    with app.state.session_factory() as db:
+        db.get(Patient, pid).bed = bed
+        db.commit()
+
+
+def _use_history(app, clock, pid, intake, uses):
+    """intake 팩을 6일 전에 넣고 uses=[(며칠 전, 팩 수)]의 사용 기록을 넣는다."""
+    with app.state.session_factory() as db:
+        staff_id = db.query(Staff).first().id
+        db.add(StockRecord(
+            patient_id=pid, kind=RecordKind.INTAKE, count=intake, staff_id=staff_id,
+            created_at=clock.now() - timedelta(days=6),
+        ))
+        for days_ago, n in uses:
+            db.add(StockRecord(
+                patient_id=pid, kind=RecordKind.USE, count=n, staff_id=staff_id,
+                created_at=clock.now() - timedelta(days=days_ago),
+            ))
+        db.commit()
+
+
+def test_daily_avg_divisor_is_avg_days(client, app, clock, admin_token):
+    # 첫 사용은 5일 전, 최근 3일(오늘 제외) 사용 6팩 -> 6 / avg_days(3) = 2.0
+    pid = _patient(client, admin_token, "D-1")
+    _use_history(app, clock, pid, 20, [(5, 1), (2, 6)])
+    row = client.get("/admin/overview", headers=auth(admin_token)).json()["rows"][0]
+    assert row["daily_avg"] == 2.0
+    assert row["balance"] == 13
+
+
+def test_patient_days_threshold_override(client, app, clock, admin_token):
+    # 잔량 5 / 일평균 2.0 = 2.5일: 기본 기준(2일)이면 충분, 환자 기준 3일이면 부족
+    pid = _patient(client, admin_token, "D-2")
+    _use_history(app, clock, pid, 12, [(5, 1), (2, 6)])
+    row = client.get("/admin/overview", headers=auth(admin_token)).json()["rows"][0]
+    assert (row["days_left"], row["status"]) == (2.5, "enough")
+    r = client.patch(f"/patients/{pid}", json={"days_threshold": 3}, headers=auth(admin_token))
+    assert r.status_code == 200, r.text
+    row = client.get("/admin/overview", headers=auth(admin_token)).json()["rows"][0]
+    assert (row["days_left"], row["status"]) == (2.5, "low")
+
+
+def test_empty_counts_as_low(client, admin_token):
+    _patient(client, admin_token, "D-3")  # 재고 0
+    body = client.get("/admin/overview", headers=auth(admin_token)).json()
+    assert body["rows"][0]["status"] == "empty"
+    assert body["low"] == 1
+
+
+def test_overview_sorted_by_bed_regardless_of_creation(client, app, admin_token):
+    ids = {bed: _patient(client, admin_token, f"B-{bed}") for bed in ("10", "2", "1")}
+    for bed, pid in ids.items():
+        _set_bed(app, pid, bed)
+    rows = client.get("/admin/overview", headers=auth(admin_token)).json()["rows"]
+    assert [r["bed"] for r in rows] == ["1", "2", "10"]
