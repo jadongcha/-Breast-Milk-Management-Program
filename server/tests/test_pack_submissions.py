@@ -113,3 +113,17 @@ def test_old_ml_input_is_ignored(client, nurse_token, world):
     sid = r.json()["submission"]["id"]
     r = _confirm(client, nurse_token, sid, {"count": 2, "ml": 99999})
     assert r.status_code == 200 and r.json()["record"]["ml"] is None
+
+
+def test_submit_and_confirm_pack_mls_strict(client, nurse_token, world):
+    st = world["a"]
+    token = _gtoken(client, st)
+    for bad in (["80", 80, 80], [True, 80, 80], [90.0, 80, 80]):
+        assert _submit(client, st, token, world["p2"], 3, pack_mls=bad).status_code == 422, bad
+    assert _pending(client, nurse_token) == []
+    assert _submit(client, st, token, world["p2"], 3).status_code == 201
+    sid = _pending(client, nurse_token)[0]["id"]
+    for bad in (["80", 80, 80], [True, 80, 80], [90.0, 80, 80]):
+        r = _confirm(client, nurse_token, sid, {"count": 3, "pack_mls": bad})
+        assert r.status_code == 422, bad
+    assert _packs(client, nurse_token, world["p2"]) == []

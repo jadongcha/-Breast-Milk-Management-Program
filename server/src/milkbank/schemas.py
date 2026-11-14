@@ -1,7 +1,7 @@
 """pydantic 입력/출력 모델."""
 import json
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationInfo, field_validator
 
@@ -13,6 +13,9 @@ from .models import (
     Role,
     SubmissionStatus,
 )
+
+
+PackId = Annotated[StrictInt, Field(ge=1, le=2**63 - 1)]
 
 
 class StaffOut(BaseModel):
@@ -135,8 +138,8 @@ class DischargeIn(BaseModel):
 class RecordIn(BaseModel):
     kind: Literal["intake", "use", "discard"]
     count: int
-    pack_mls: list[int | None] | None = None
-    pack_ids: list[int] | None = None
+    pack_mls: list[StrictInt | None] | None = None
+    pack_ids: list[PackId] | None = None
     discard_reason: DiscardReason | None = None
     memo: str | None = None
 
@@ -231,7 +234,7 @@ class GuardianLoginOut(BaseModel):
 class SubmitIn(BaseModel):
     patient_id: int
     count: int
-    pack_mls: list[int | None] | None = None
+    pack_mls: list[StrictInt | None] | None = None
 
 
 class SubmittedOut(BaseModel):
@@ -294,7 +297,7 @@ class PendingOut(BaseModel):
 
 class ConfirmIn(BaseModel):
     count: int
-    pack_mls: list[int | None] | None = None
+    pack_mls: list[StrictInt | None] | None = None
 
 
 class ConfirmResult(BaseModel):

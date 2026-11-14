@@ -218,3 +218,38 @@ def test_discharge_takes_all_stock_packs(client, app, admin_token, nurse_token):
     with app.state.session_factory() as db:
         assert packs.in_stock(db, pid) == []
         assert stock.balance(db, pid) == 0
+
+
+def test_cancel_copies_ml_unknown(client, admin_token, nurse_token):
+    pid = _pid(client, admin_token)
+    intake = _ok(client, nurse_token, pid, kind="intake", count=2, pack_mls=[80, None])
+    use = _ok(client, nurse_token, pid, kind="use", count=2)["record"]
+    assert use["ml_unknown"] == 1
+    r = client.post(f"/records/{use['id']}/cancel", headers=auth(nurse_token))
+    assert r.status_code == 201
+    assert r.json()["record"]["ml_unknown"] == 1 and r.json()["record"]["ml"] == 80
+    r = client.post(f"/records/{intake['record']['id']}/cancel", headers=auth(nurse_token))
+    assert r.status_code == 201
+    assert r.json()["record"]["ml_unknown"] == 1 and r.json()["record"]["ml"] == 80
+
+
+def test_pack_inputs_are_strict_ints(client, admin_token, nurse_token):
+    pid = _pid(client, admin_token)
+    for bad in (["80", 80], [True, 80], [90.0, 80]):
+        r = _rec(client, nurse_token, pid, kind="intake", count=2, pack_mls=bad)
+        assert r.status_code == 422, bad
+    assert _detail(client, nurse_token, pid)["packs"] == []
+    _ok(client, nurse_token, pid, kind="intake", count=1, pack_mls=[80])
+    for bad in (["1"], [True], [1.0]):
+        r = _rec(client, nurse_token, pid, kind="use", count=1, pack_ids=bad)
+        assert r.status_code == 422, bad
+    assert _detail(client, nurse_token, pid)["balance"] == 1
+
+
+def test_oversized_pack_ids_rejected(client, admin_token, nurse_token):
+    pid = _pid(client, admin_token)
+    _ok(client, nurse_token, pid, kind="intake", count=1)
+    for bad in (2**63, 2**70, 0, -1):
+        r = _rec(client, nurse_token, pid, kind="use", count=1, pack_ids=[bad])
+        assert r.status_code == 422, bad
+    assert _detail(client, nurse_token, pid)["balance"] == 1
