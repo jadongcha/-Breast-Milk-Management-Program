@@ -159,6 +159,9 @@
     <string name="guardian_finish">마치기</string>
     <string name="guardian_count_title">가져온 모유 팩 수를 눌러 주세요</string>
     <string name="guardian_submit_confirm">%1$s 아기 모유 %2$d팩을 제출합니다</string>
+    <string name="guardian_ml_label">총 용량(mL) · 모르면 비워 두세요</string>
+    <string name="guardian_confirm_with_ml">%1$s 아기 모유 %2$d팩 · %3$dmL를 제출합니다</string>
+    <string name="guardian_done_submitted_ml">방금 제출한 모유 %1$d팩 · %2$dmL</string>
     <string name="guardian_submit">제출</string>
     <string name="guardian_done_title">제출 접수 완료</string>
     <string name="guardian_done_submitted">방금 제출한 모유 %1$d팩</string>

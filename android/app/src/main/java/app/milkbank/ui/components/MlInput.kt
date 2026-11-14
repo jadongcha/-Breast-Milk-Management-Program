@@ -34,11 +34,11 @@ fun MlParse.valueOrNull(): Int? = (this as? MlParse.Valid)?.ml
 
 /** Optional volume field under the pack count; shows the range error under the field when invalid. */
 @Composable
-fun MlField(text: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun MlField(text: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, fieldModifier: Modifier = Modifier) {
     val invalid = parseMl(text) == MlParse.Invalid
     Column(modifier) {
         IdleTextField(
-            text, onChange, label, Modifier.fillMaxWidth(),
+            text, onChange, label, Modifier.fillMaxWidth().then(fieldModifier),
             enabled = enabled, isError = invalid,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )

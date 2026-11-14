@@ -198,7 +198,7 @@ data class BabyDto(
 data class GuardianLoginResponse(val token: String, val babies: List<BabyDto>)
 
 @Serializable
-data class GuardianSubmitRequest(@SerialName("patient_id") val patientId: Int, val count: Int)
+data class GuardianSubmitRequest(@SerialName("patient_id") val patientId: Int, val count: Int, val ml: Int? = null)
 
 @Serializable
 data class SubmissionBriefDto(
@@ -207,6 +207,7 @@ data class SubmissionBriefDto(
     @SerialName("submitted_at")
     @Serializable(with = InstantSerializer::class)
     val submittedAt: Instant,
+    val ml: Int? = null,
 )
 
 @Serializable

@@ -154,13 +154,13 @@ class FakeGuardian(private val world: FakeWorld? = null) : GuardianRepository {
         return if (world != null) ApiResult.Ok(listOf(baby())) else ApiResult.Err(unsupported)
     }
 
-    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int):
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, ml: Int?):
         ApiResult<GuardianSubmitResponse> {
         receivedStationTokens.add(stationToken)
         val w = world ?: return ApiResult.Err(unsupported)
         w.pending += count
         return ApiResult.Ok(
-            GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.now()), w.balance, w.pending),
+            GuardianSubmitResponse(SubmissionBriefDto(1, count, Instant.now(), ml), w.balance, w.pending),
         )
     }
 

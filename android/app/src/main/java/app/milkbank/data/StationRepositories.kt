@@ -45,6 +45,7 @@ interface GuardianRepository {
         guardianToken: String,
         patientId: Int,
         count: Int,
+        ml: Int?,
     ): ApiResult<GuardianSubmitResponse>
 
     /** Sent from the app scope without waiting for the answer; failures are ignored. */
@@ -80,9 +81,9 @@ class HttpGuardianRepository(
     override suspend fun babies(stationToken: String?, guardianToken: String) =
         api.call(networkError) { it.guardianBabies(stationToken, "Bearer $guardianToken") }
 
-    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int) =
+    override suspend fun submit(stationToken: String?, guardianToken: String, patientId: Int, count: Int, ml: Int?) =
         api.call(networkError) {
-            it.guardianSubmit(stationToken, "Bearer $guardianToken", GuardianSubmitRequest(patientId, count))
+            it.guardianSubmit(stationToken, "Bearer $guardianToken", GuardianSubmitRequest(patientId, count, ml))
         }
 
     override fun logout(stationToken: String?, guardianToken: String): Job {

@@ -34,6 +34,7 @@ class GuardianViewModelTest {
         var babiesHandler: suspend () -> ApiResult<List<BabyDto>> = { error("unset") }
         var submitHandler: suspend () -> ApiResult<GuardianSubmitResponse> = { error("unset") }
         var submitCalls = 0
+        val submittedMl = mutableListOf<Int?>()
         val logouts = mutableListOf<Pair<String?, String>>()
         override suspend fun login(stationToken: String?, phone: String, babyId: String) = loginHandler()
         override suspend fun babies(stationToken: String?, guardianToken: String) = babiesHandler()
@@ -42,8 +43,10 @@ class GuardianViewModelTest {
             guardianToken: String,
             patientId: Int,
             count: Int,
+            ml: Int?,
         ): ApiResult<GuardianSubmitResponse> {
             submitCalls++
+            submittedMl += ml
             return submitHandler()
         }
 
@@ -106,10 +109,62 @@ class GuardianViewModelTest {
         login(vm)
         vm.startSubmit()
         vm.pickCount(3)
-        assertEquals(GuardianStep.ConfirmSubmit(b1, 3), vm.step.value)
+        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, null), vm.step.value)
         repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH), 2, 3)) }
         vm.submit()
-        assertEquals(GuardianStep.Done(b1, 3, 2, 3), vm.step.value)
+        assertEquals(GuardianStep.Done(b1, 3, null, 2, 3), vm.step.value)
+    }
+
+    private fun toConfirm(vm: GuardianViewModel, mlText: String?) {
+        login(vm)
+        vm.startSubmit()
+        if (mlText != null) vm.setMl(mlText)
+        vm.pickCount(3)
+    }
+
+    @Test fun submit_sendsMl() {
+        val vm = vm()
+        toConfirm(vm, "240")
+        assertEquals(GuardianStep.ConfirmSubmit(b1, 3, 240), vm.step.value)
+        repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, 240), 2, 3)) }
+        vm.submit()
+        assertEquals(listOf<Int?>(240), repo.submittedMl)
+        assertEquals(GuardianStep.Done(b1, 3, 240, 2, 3), vm.step.value)
+    }
+
+    @Test fun submit_emptyMlSendsNull() {
+        val vm = vm()
+        toConfirm(vm, "  ")
+        repo.submitHandler = { ApiResult.Ok(GuardianSubmitResponse(SubmissionBriefDto(1, 3, Instant.EPOCH, null), 2, 3)) }
+        vm.submit()
+        assertEquals(listOf<Int?>(null), repo.submittedMl)
+        assertEquals(GuardianStep.Done(b1, 3, null, 2, 3), vm.step.value)
+    }
+
+    @Test fun invalidMl_blocksSubmit() {
+        val vm = vm()
+        toConfirm(vm, "0")
+        vm.submit()
+        assertEquals(0, repo.submitCalls)
+        assertEquals(GuardianStep.PickCount(b1, null, "0"), vm.step.value)
+    }
+
+    @Test fun back_keepsMlText() {
+        val vm = vm()
+        toConfirm(vm, "240")
+        vm.back()
+        assertEquals(GuardianStep.PickCount(b1, 3, "240"), vm.step.value)
+    }
+
+    @Test fun setMl_rearmsIdle() {
+        val vm = vm()
+        login(vm)
+        vm.startSubmit()
+        clock.advance(Duration.ofSeconds(50))
+        vm.setMl("2")
+        clock.advance(Duration.ofSeconds(50))
+        idle.check()
+        assertEquals(GuardianStep.PickCount(b1, null, "2"), vm.step.value)
     }
 
     @Test fun submitWhileSubmitting_isIgnored() {

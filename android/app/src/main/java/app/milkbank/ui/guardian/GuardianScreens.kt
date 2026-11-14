@@ -35,6 +35,7 @@ import app.milkbank.api.BabyDto
 import app.milkbank.ui.IdleAwareDialog
 import app.milkbank.ui.LocalOnline
 import app.milkbank.ui.components.IdleTextField
+import app.milkbank.ui.components.MlField
 
 private val BUTTON_MIN_HEIGHT = 64.dp
 
@@ -102,9 +103,9 @@ private fun GuardianSteps(vm: GuardianViewModel) {
                     GuardianButton(stringResource(R.string.guardian_finish), vm::finish, Modifier.fillMaxWidth(), outlined = true)
                 }
                 is GuardianStep.Stock -> StockStep(s, vm, online)
-                is GuardianStep.PickCount -> PickStep(s.baby, vm)
+                is GuardianStep.PickCount -> PickStep(s.baby, s.mlText, vm)
                 is GuardianStep.ConfirmSubmit -> {
-                    PickStep(s.baby, vm)
+                    PickStep(s.baby, s.ml?.toString() ?: "", vm)
                     ConfirmDialog(s, vm, submitting, online)
                 }
                 is GuardianStep.Done -> DoneStep(s, vm)
@@ -175,7 +176,7 @@ private fun StockStep(s: GuardianStep.Stock, vm: GuardianViewModel, online: Bool
 }
 
 @Composable
-private fun PickStep(baby: BabyDto, vm: GuardianViewModel) {
+private fun PickStep(baby: BabyDto, mlText: String, vm: GuardianViewModel) {
     Title(stringResource(R.string.guardian_count_title))
     Text(baby.babyId, style = MaterialTheme.typography.titleLarge)
     for (row in listOf(1..5, 6..10)) {
@@ -185,6 +186,7 @@ private fun PickStep(baby: BabyDto, vm: GuardianViewModel) {
             }
         }
     }
+    MlField(mlText, vm::setMl, stringResource(R.string.guardian_ml_label), Modifier.fillMaxWidth(), fieldModifier = Modifier.heightIn(min = 64.dp))
     GuardianButton(stringResource(R.string.back), vm::back, Modifier.fillMaxWidth(), outlined = true)
 }
 
@@ -194,7 +196,8 @@ private fun ConfirmDialog(s: GuardianStep.ConfirmSubmit, vm: GuardianViewModel, 
         Surface(shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Text(
-                    stringResource(R.string.guardian_submit_confirm, s.baby.babyId, s.count),
+                    if (s.ml == null) stringResource(R.string.guardian_submit_confirm, s.baby.babyId, s.count)
+                    else stringResource(R.string.guardian_confirm_with_ml, s.baby.babyId, s.count, s.ml),
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -209,7 +212,9 @@ private fun ConfirmDialog(s: GuardianStep.ConfirmSubmit, vm: GuardianViewModel, 
 @Composable
 private fun DoneStep(s: GuardianStep.Done, vm: GuardianViewModel) {
     Title(stringResource(R.string.guardian_done_title))
-    Text(stringResource(R.string.guardian_done_submitted, s.count), style = MaterialTheme.typography.headlineMedium)
+    Text(if (s.ml == null) stringResource(R.string.guardian_done_submitted, s.count)
+        else stringResource(R.string.guardian_done_submitted_ml, s.count, s.ml),
+        style = MaterialTheme.typography.headlineMedium)
     Text(stringResource(R.string.guardian_done_stock, s.balance), style = MaterialTheme.typography.headlineMedium)
     Text(
         stringResource(R.string.guardian_done_note, s.count),

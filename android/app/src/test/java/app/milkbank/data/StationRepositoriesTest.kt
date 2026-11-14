@@ -59,6 +59,16 @@ class StationRepositoriesTest {
     }
 
     @Test
+    fun guardianSubmit_sendsMlWhenGiven() = runBlocking {
+        server.enqueue(
+            json("""{"submission":{"id":9,"count":3,"ml":240,"submitted_at":"2026-11-10T05:13:00"},"balance":7,"pending_count":1}"""),
+        )
+        val r = HttpGuardianRepository(api, net).submit("st", "gt", 4, 3, 240) as ApiResult.Ok
+        assertEquals(240, r.value.submission.ml)
+        assertEquals("""{"patient_id":4,"count":3,"ml":240}""", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
     fun guardianCalls_withoutStationToken_omitHeader() = runBlocking {
         val repo = HttpGuardianRepository(api, net)
         server.enqueue(json("""{"token":"gt","babies":[]}"""))
@@ -68,7 +78,7 @@ class StationRepositoriesTest {
         server.enqueue(
             json("""{"submission":{"id":9,"count":3,"submitted_at":"2026-11-10T05:13:00"},"balance":7,"pending_count":1}"""),
         )
-        repo.submit(null, "gt", 4, 3)
+        repo.submit(null, "gt", 4, 3, null)
         server.enqueue(MockResponse().setResponseCode(204))
         repo.logout(null, "gt").join()
         repeat(4) {
@@ -121,7 +131,7 @@ class StationRepositoriesTest {
                 "balance":7,"pending_count":1}""",
             ),
         )
-        val r = HttpGuardianRepository(api, net).submit("st", "gt", 4, 3) as ApiResult.Ok
+        val r = HttpGuardianRepository(api, net).submit("st", "gt", 4, 3, null) as ApiResult.Ok
         assertEquals(9, r.value.submission.id)
         assertEquals(Instant.parse("2026-11-10T05:13:00Z"), r.value.submission.submittedAt)
         assertEquals(1, r.value.pendingCount)
