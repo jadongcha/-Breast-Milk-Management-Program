@@ -135,6 +135,15 @@ class DailyViewModel(
         }
     }
 
+    /**
+     * Result of the system "save as" dialog. A null [target] means the user canceled: nothing is fetched,
+     * written or reported. Otherwise the CSV for [from]..[to] is fetched and written to [target].
+     */
+    fun <T : Any> onDocumentChosen(target: T?, from: LocalDate, to: LocalDate, write: suspend (T, ByteArray) -> Unit) {
+        if (target == null) return
+        export(from, to) { bytes -> write(target, bytes) }
+    }
+
     private suspend fun guarded(block: suspend () -> Unit) {
         try {
             block()

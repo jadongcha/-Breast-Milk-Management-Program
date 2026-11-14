@@ -125,11 +125,24 @@ class DailyViewModelTest {
 
     @Test fun exportCanceled_noError() = runTest {
         val v = vm()
-        // Canceling the file dialog never reaches export(); nothing may be reported.
+        var wrote = false
+        v.onDocumentChosen<String>(null, LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-14")) { _, _ -> wrote = true }
         advanceUntilIdle()
+        assertTrue(repo.exportCalls.isEmpty())
+        assertTrue(!wrote)
         assertNull(v.error.value)
         assertNull(v.notice.value)
-        assertTrue(repo.exportCalls.isEmpty())
+    }
+
+    @Test fun documentChosen_writesToTarget_andShowsSaved() = runTest {
+        val v = vm()
+        var got: Pair<String, List<Byte>>? = null
+        v.onDocumentChosen("doc", LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-14")) { t, b -> got = t to b.toList() }
+        advanceUntilIdle()
+        assertEquals(listOf("2026-11-01" to "2026-11-14"), repo.exportCalls)
+        assertEquals("doc" to listOf<Byte>(1, 2, 3), got)
+        assertEquals("CSV 파일을 저장했습니다", v.notice.value)
+        assertNull(v.error.value)
     }
 
     @Test fun export_success_writesBytes_andShowsSaved() = runTest {

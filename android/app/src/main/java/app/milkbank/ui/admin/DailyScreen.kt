@@ -82,15 +82,14 @@ fun DailyScreen(viewModel: DailyViewModel, onBack: () -> Unit) {
     var pendingTo by rememberSaveable { mutableStateOf("") }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri: Uri? ->
-        // A null Uri means the user canceled the file dialog: do nothing, show nothing.
-        if (uri == null) return@rememberLauncherForActivityResult
         val from = runCatching { LocalDate.parse(pendingFrom) }.getOrNull()
         val to = runCatching { LocalDate.parse(pendingTo) }.getOrNull()
-        if (from == null || to == null) return@rememberLauncherForActivityResult
-        viewModel.export(from, to) { bytes ->
-            withContext(Dispatchers.IO) {
-                val out = context.contentResolver.openOutputStream(uri) ?: throw IOException("no output stream")
-                out.use { it.write(bytes) }
+        if (from != null && to != null) {
+            viewModel.onDocumentChosen(uri, from, to) { target, bytes ->
+                withContext(Dispatchers.IO) {
+                    val out = context.contentResolver.openOutputStream(target) ?: throw IOException("no output stream")
+                    out.use { it.write(bytes) }
+                }
             }
         }
     }
