@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from .. import guardians as guardian_service
+from .. import settings as settings_service
 from .. import staff as staff_service
 from .. import stations as station_service
 from ..clock import Clock
@@ -46,20 +47,21 @@ def bearer_token(request: Request) -> str | None:
 
 
 def current_staff_any(request: Request, db: DbDep) -> Staff:
-    config: Config = request.app.state.config
     return staff_service.authenticate(
-        db, request.app.state.clock, bearer_token(request), config.staff_idle_minutes
+        db,
+        request.app.state.clock,
+        bearer_token(request),
+        settings_service.get(db).staff_idle_minutes,
     )
 
 
 def current_staff_no_refresh(request: Request, db: DbDep) -> Staff:
     """로그인 유지 확인용: 마지막 활동 시각을 갱신하지 않는다."""
-    config: Config = request.app.state.config
     return staff_service.authenticate(
         db,
         request.app.state.clock,
         bearer_token(request),
-        config.staff_idle_minutes,
+        settings_service.get(db).staff_idle_minutes,
         refresh=False,
     )
 

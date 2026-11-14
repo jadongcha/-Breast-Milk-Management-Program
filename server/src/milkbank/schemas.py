@@ -25,6 +25,26 @@ class StaffOut(BaseModel):
     must_change_password: bool
 
 
+class MeOut(StaffOut):
+    staff_idle_minutes: int
+
+
+class SettingsOut(BaseModel):
+    days_threshold: int
+    packs_threshold: int
+    avg_days: int
+    staff_idle_minutes: int
+    retention_days: int
+
+
+class SettingsPatch(BaseModel):
+    days_threshold: int | None = None
+    packs_threshold: int | None = None
+    avg_days: int | None = None
+    staff_idle_minutes: int | None = None
+    retention_days: int | None = None
+
+
 class LoginIn(BaseModel):
     username: str
     password: str
@@ -34,6 +54,7 @@ class LoginOut(BaseModel):
     token: str
     must_change_password: bool
     staff: StaffOut
+    staff_idle_minutes: int
 
 
 class PasswordChangeIn(BaseModel):

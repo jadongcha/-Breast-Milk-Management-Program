@@ -6,7 +6,6 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Config:
     db_path: Path
-    staff_idle_minutes: int = 10
     cancel_window_minutes: int = 10
     login_lock_threshold: int = 5
     login_lock_minutes: int = 10

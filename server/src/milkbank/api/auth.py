@@ -2,10 +2,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
 
+from .. import settings as settings_service
 from .. import staff as staff_service
 from ..errors import DomainError
 from ..models import Staff
-from ..schemas import LoginIn, LoginOut, PasswordChangeIn, StaffOut
+from ..schemas import LoginIn, LoginOut, MeOut, PasswordChangeIn, StaffOut
 from .deps import DbDep, bearer_token, current_staff_any, current_staff_check
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -31,6 +32,7 @@ def login(body: LoginIn, request: Request, db: DbDep):
         token=token,
         must_change_password=staff.must_change_password,
         staff=StaffOut.model_validate(staff),
+        staff_idle_minutes=settings_service.get(db).staff_idle_minutes,
     )
 
 
@@ -54,9 +56,12 @@ def change_password(
     return Response(status_code=204)
 
 
-@router.get("/me", response_model=StaffOut)
-def me(staff: Annotated[Staff, Depends(current_staff_any)]):
-    return staff
+@router.get("/me", response_model=MeOut)
+def me(db: DbDep, staff: Annotated[Staff, Depends(current_staff_any)]):
+    return MeOut(
+        **StaffOut.model_validate(staff).model_dump(),
+        staff_idle_minutes=settings_service.get(db).staff_idle_minutes,
+    )
 
 
 @router.get("/check", status_code=204)
