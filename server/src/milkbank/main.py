@@ -10,6 +10,8 @@ from .clock import Clock, SystemClock
 from .config import Config, load_config
 from .db import make_engine, make_session_factory
 from . import discharge
+from . import settings as settings_service
+from .backups import prune_backups
 from .errors import DomainError
 from .migrate import migrate
 
@@ -21,10 +23,13 @@ def _erase_due_once(app: FastAPI) -> None:
     with app.state.session_factory() as db:
         try:
             ids = discharge.erase_due(db, app.state.clock)
+            retention = settings_service.get(db).retention_days
             db.commit()
         except BaseException:
             db.rollback()
             raise
+    # 마이그레이션 백업에도 개인정보가 있으므로 보관 기간이 지나면 지운다.
+    prune_backups(app.state.config.backups_dir, app.state.clock, retention)
     if ids:
         log.info("보관 기간이 지난 환자 %d명의 개인정보를 말소했습니다", len(ids))
 
