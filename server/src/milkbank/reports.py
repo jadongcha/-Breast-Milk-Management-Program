@@ -1,4 +1,7 @@
 """관리자 현황·판정 입력 계산."""
+import csv
+import io
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -127,3 +130,113 @@ def overview(db: Session, clock: Clock, s: Settings) -> dict:
         "pending_submissions": pending_count,
         "rows": rows,
     }
+
+
+@dataclass
+class DayRow:
+    day: date
+    patient_id: int
+    baby_id: str
+    bed: str
+    in_packs: int
+    in_ml: int | None
+    use_packs: int
+    use_ml: int | None
+    discard_packs: int
+    discard_ml: int | None
+    return_packs: int
+
+
+@dataclass
+class SeriesPoint:
+    day: date
+    in_packs: int
+    use_packs: int
+    discard_packs: int
+    use_ml: int | None
+
+
+def _add_ml(total: int | None, ml: int | None) -> int | None:
+    if ml is None:
+        return total
+    return ml if total is None else total + ml
+
+
+def _live_records(db: Session, start: date, end: date, patient_id: int | None = None):
+    """start~end(포함, KST) 기간의 취소 기록과 취소된 기록을 뺀 (기록, 환자) 목록."""
+    q = (
+        select(StockRecord, Patient)
+        .join(Patient, Patient.id == StockRecord.patient_id)
+        .where(
+            StockRecord.kind != RecordKind.CANCEL,
+            StockRecord.id.not_in(stock._canceled_ids()),
+            StockRecord.created_at >= _kst_day_start(start),
+            StockRecord.created_at < _kst_day_start(end + timedelta(days=1)),
+        )
+        .order_by(StockRecord.created_at, StockRecord.id)
+    )
+    if patient_id is not None:
+        q = q.where(StockRecord.patient_id == patient_id)
+    return db.execute(q).all()
+
+
+def daily_rows(db: Session, start: date, end: date) -> list[DayRow]:
+    rows: dict[tuple[date, int], DayRow] = {}
+    for rec, p in _live_records(db, start, end):
+        day = rec.created_at.astimezone(KST).date()
+        row = rows.get((day, p.id))
+        if row is None:
+            row = rows[(day, p.id)] = DayRow(
+                day, p.id, p.reg_no, p.bed, 0, None, 0, None, 0, None, 0
+            )
+        if rec.kind == RecordKind.INTAKE:
+            row.in_packs += rec.count
+            row.in_ml = _add_ml(row.in_ml, rec.ml)
+        elif rec.kind == RecordKind.USE:
+            row.use_packs += rec.count
+            row.use_ml = _add_ml(row.use_ml, rec.ml)
+        elif rec.kind == RecordKind.DISCARD:
+            row.discard_packs += rec.count
+            row.discard_ml = _add_ml(row.discard_ml, rec.ml)
+        elif rec.kind == RecordKind.RETURN:
+            row.return_packs += rec.count
+    return sorted(rows.values(), key=lambda r: (r.day, bed_sort_key(r.bed), r.patient_id))
+
+
+def series(db: Session, today: date, days: int, patient_id: int | None) -> list[SeriesPoint]:
+    first = today - timedelta(days=days - 1)
+    points = {
+        first + timedelta(days=i): SeriesPoint(first + timedelta(days=i), 0, 0, 0, None)
+        for i in range(days)
+    }
+    for rec, _ in _live_records(db, first, today, patient_id):
+        pt = points[rec.created_at.astimezone(KST).date()]
+        if rec.kind == RecordKind.INTAKE:
+            pt.in_packs += rec.count
+        elif rec.kind == RecordKind.USE:
+            pt.use_packs += rec.count
+            pt.use_ml = _add_ml(pt.use_ml, rec.ml)
+        elif rec.kind == RecordKind.DISCARD:
+            pt.discard_packs += rec.count
+    return list(points.values())
+
+
+CSV_HEADER = ["날짜", "아기 ID", "병상", "입고 팩", "입고 mL", "사용 팩", "사용 mL",
+              "폐기 팩", "폐기 mL", "퇴원 반환 팩"]
+
+
+def _blank(v: int | None) -> int | str:
+    return "" if v is None else v
+
+
+def csv_bytes(rows: list[DayRow]) -> bytes:
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\r\n")
+    w.writerow(CSV_HEADER)
+    for r in rows:
+        w.writerow(
+            [r.day.isoformat(), r.baby_id, r.bed, r.in_packs, _blank(r.in_ml),
+             r.use_packs, _blank(r.use_ml), r.discard_packs, _blank(r.discard_ml),
+             r.return_packs]
+        )
+    return b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")

@@ -296,3 +296,40 @@ class OverviewOut(BaseModel):
     today_use_ml: int | None
     pending_submissions: int
     rows: list[OverviewRow]
+
+
+class DailyRow(BaseModel):
+    patient_id: int
+    baby_id: str
+    bed: str
+    in_packs: int
+    in_ml: int | None
+    use_packs: int
+    use_ml: int | None
+    discard_packs: int
+    discard_ml: int | None
+    return_packs: int
+
+
+class DailyTotal(BaseModel):
+    in_packs: int
+    in_ml: int | None
+    use_packs: int
+    use_ml: int | None
+    discard_packs: int
+    discard_ml: int | None
+    return_packs: int
+
+
+class DailyOut(BaseModel):
+    date: date
+    rows: list[DailyRow]
+    total: DailyTotal
+
+
+class SeriesPointOut(BaseModel):
+    day: date
+    in_packs: int
+    use_packs: int
+    use_ml: int | None
+    discard_packs: int
