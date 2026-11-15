@@ -1,8 +1,10 @@
 """다른 PC용 실행 파일(milkbank-server)의 하위 명령 진입점."""
+import os
 import sys
 from importlib.metadata import PackageNotFoundError, version
 
 from . import cli, serve, setup_tls
+from .serve import SETUP_HINT_ENV
 from .cli import _utf8_streams
 
 _USAGE = """사용법: milkbank-server <명령> [옵션]
@@ -22,6 +24,9 @@ def _version() -> None:
         print("알 수 없음")
 
 
+_PACKAGED_HINT = "먼저 처음설정.bat를 실행하세요"
+
+
 def main(argv: list[str] | None = None) -> None:
     _utf8_streams()
     args = list(sys.argv[1:] if argv is None else argv)
@@ -35,5 +40,8 @@ def main(argv: list[str] | None = None) -> None:
     if entry is None:
         print(_USAGE, file=sys.stderr, end="")
         raise SystemExit(2)
+    if getattr(sys, "frozen", False):
+        # 설치 폴더(실행 파일)에서는 개발용 명령 대신 배치 파일을 안내한다.
+        os.environ.setdefault(SETUP_HINT_ENV, _PACKAGED_HINT)
     sys.argv = [f"milkbank-server {command}", *rest]
     entry.main()

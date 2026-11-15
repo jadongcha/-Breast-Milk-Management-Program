@@ -1,3 +1,4 @@
+import os
 import sys
 from importlib.metadata import version
 
@@ -47,3 +48,26 @@ def test_unknown_or_missing_command_prints_usage_and_exits_2(capsys, argv):
 def test_version_prints_package_version(capsys):
     launcher.main(["version"])
     assert capsys.readouterr().out.strip() == version("milkbank")
+
+
+def test_frozen_launcher_sets_packaged_setup_hint(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.delenv("MILKBANK_SETUP_HINT", raising=False)
+    monkeypatch.setenv("MILKBANK_DB", str(tmp_path / "m.db"))
+    try:
+        with pytest.raises(SystemExit) as e:
+            launcher.main(["serve"])
+    finally:
+        os.environ.pop("MILKBANK_SETUP_HINT", None)  # launcher가 직접 넣은 값이라 직접 지운다
+    assert e.value.code == 1
+    err = capsys.readouterr().err
+    assert "먼저 처음설정.bat를 실행하세요" in err
+    assert "milkbank-setup-tls" not in err
+
+
+def test_unfrozen_launcher_keeps_developer_message(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("MILKBANK_SETUP_HINT", raising=False)
+    monkeypatch.setenv("MILKBANK_DB", str(tmp_path / "m.db"))
+    with pytest.raises(SystemExit):
+        launcher.main(["serve"])
+    assert "먼저 milkbank-setup-tls를 실행하세요" in capsys.readouterr().err

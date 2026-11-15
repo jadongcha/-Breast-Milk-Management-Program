@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 
 import uvicorn
@@ -10,6 +11,12 @@ from milkbank.db import make_engine
 from milkbank.migrate import LegacyDatabaseError, UnknownRevisionError, migrate
 
 _MISSING = "먼저 milkbank-setup-tls를 실행하세요"
+# 실행 파일 폴더(launcher)가 환경 변수로 다른 안내 문구를 줄 수 있다.
+SETUP_HINT_ENV = "MILKBANK_SETUP_HINT"
+
+
+def _missing_message() -> str:
+    return os.environ.get(SETUP_HINT_ENV) or _MISSING
 
 
 def main() -> None:
@@ -23,10 +30,10 @@ def main() -> None:
         port = int(info["port"])
         url = str(info["url"])
     except (OSError, ValueError, KeyError, TypeError):
-        print(_MISSING, file=sys.stderr)
+        print(_missing_message(), file=sys.stderr)
         raise SystemExit(1) from None
     if not (crt.is_file() and key.is_file()):
-        print(_MISSING, file=sys.stderr)
+        print(_missing_message(), file=sys.stderr)
         raise SystemExit(1)
     engine = make_engine(config.db_path)
     try:
