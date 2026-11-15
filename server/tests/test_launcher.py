@@ -7,6 +7,12 @@ import pytest
 from milkbank import cli, launcher, serve, setup_tls
 
 
+@pytest.fixture(autouse=True)
+def _restore_argv(monkeypatch):
+    # launcher.main 이 sys.argv 를 덮어쓰므로, 테스트가 끝나면 원래대로 돌려놓는다.
+    monkeypatch.setattr(sys, "argv", list(sys.argv))
+
+
 @pytest.mark.parametrize(
     ("command", "module"),
     [("setup-tls", setup_tls), ("create-admin", cli), ("serve", serve)],
