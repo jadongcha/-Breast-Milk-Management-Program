@@ -40,7 +40,10 @@ function Protect-PackageFolder {
     $qrSrc = Join-Path $data 'tls\server-qr.png'
     $qrDst = Join-Path $root '서버등록QR.png'
     # SID로 지정해 Windows 언어와 상관없이 동작한다. S-1-5-18 SYSTEM, S-1-5-32-544 Administrators, S-1-5-32-545 Users
+    # 먼저 소유자를 Administrators로 바꾼다. 일반 사용자가 폴더를 만들었거나 복사했다면 그 사람이 소유자라서
+    # 권한 변경(WRITE_DAC)을 암묵적으로 갖고 있어, 스스로 다시 쓰기 권한을 줄 수 있기 때문이다.
     $cmds = @(
+        @($root, '/setowner', '*S-1-5-32-544', '/T'),
         @($root, '/inheritance:r'),
         @($root, '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX'),
         @($data, '/inheritance:r'),
@@ -61,7 +64,7 @@ function Protect-PackageFolder {
         }
     }
     Write-Host '폴더를 잠갔습니다.'
-    Write-Host "  - $root : 관리자와 SYSTEM은 모든 권한, 일반 사용자는 읽기와 실행만 가능합니다."
+    Write-Host "  - $root : 소유자는 Administrators, 관리자와 SYSTEM은 모든 권한, 일반 사용자는 읽기와 실행만 가능합니다."
     Write-Host "  - $data : 관리자와 SYSTEM만 접근할 수 있습니다(일반 사용자는 읽을 수 없습니다)."
     Write-Host '  - 서버 등록 QR은 일반 사용자도 열 수 있도록 서버등록QR.png로 폴더 맨 위에 복사했습니다.'
     return $true

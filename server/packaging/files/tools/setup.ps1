@@ -23,10 +23,13 @@ if (Test-Path -LiteralPath 'data\tls\server.json') {
         Write-Host ''
         Write-Host '폴더 권한을 확인하고 자동 시작을 다시 등록합니다.'
         $locked = Protect-PackageFolder
-        $registered = Register-AutoStart
-        if ($locked -and $registered) { Write-Host '끝났습니다.' }
-        else { Write-Host '위 메시지를 확인해 주세요.'; exit 1 }
-        exit 0
+        if (-not $locked) {
+            Write-Host '폴더를 잠그지 못해 자동 시작 등록을 하지 않습니다. 위 메시지를 확인해 주세요.'
+            exit 1
+        }
+        if (Register-AutoStart) { Write-Host '끝났습니다.'; exit 0 }
+        Write-Host '위 메시지를 확인해 주세요.'
+        exit 1
     }
     if ($choice -ne '2') {
         Write-Host '설정을 바꾸지 않고 끝냅니다.'
