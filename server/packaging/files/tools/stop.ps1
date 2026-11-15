@@ -1,6 +1,10 @@
 ﻿# 서버중지.bat 가 부른다.
 . (Join-Path $PSScriptRoot 'common.ps1')
 
+Ensure-Admin '서버중지.bat'
+
+# 이 PC에서 도는 milkbank-server.exe 를 모두 끈다(다른 폴더의 서버도 포함).
+Write-Host '이 PC에서 켜져 있는 모든 milkbank-server.exe(다른 폴더의 서버 포함)를 끕니다.'
 if ($script:DryRun) {
     Write-DryRun 'taskkill /IM milkbank-server.exe /F'
     exit 0
@@ -9,8 +13,7 @@ if ($script:DryRun) {
 & taskkill /IM milkbank-server.exe /F
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
-    Write-Host '서버를 끄지 못했습니다. 이미 꺼져 있거나, 자동 시작으로 켜진 서버라면'
-    Write-Host '이 파일을 마우스 오른쪽 → 관리자 권한으로 실행해 주세요.'
+    Write-Host '서버를 끄지 못했습니다. 이미 꺼져 있을 수 있습니다.'
     exit 1
 }
 Write-Host ''

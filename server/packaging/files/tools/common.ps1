@@ -9,9 +9,48 @@ $script:Exe = Join-Path $script:Root 'milkbank-server.exe'
 $script:DryRun = ($env:MILKBANK_DRYRUN -eq '1')
 $script:TaskName = 'MilkbankServer'
 
+# 관리자 권한(관리자 그룹 소속 + 권한 상승된 상태)인지 확인한다. SYSTEM(자동 시작 작업)도 통과한다.
 function Test-Admin {
-    & net session *> $null
-    return ($LASTEXITCODE -eq 0)
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    if ($id.User.Value -eq 'S-1-5-18') { return $true }
+    return ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# 관리자가 아니면 UAC("사용자 계정 컨트롤") 창을 띄워 같은 .bat 파일을 관리자 권한으로 다시 실행하고 이 스크립트는 끝낸다.
+# 새 창이 끝날 때까지 기다리고, .bat 파일은 이 종료 코드(77)를 보면 "계속하려면" 멈춤을 건너뛴다.
+$script:RelaunchCode = 77
+function Ensure-Admin([string]$Bat, [string]$BatArgs = '') {
+    if (Test-Admin) { return }
+    $batPath = Join-Path $script:Root $Bat
+    $cmdArgs = '/c ""{0}" {1}"' -f $batPath, $BatArgs
+    if ($script:DryRun) {
+        Write-DryRun "현재 관리자 권한이 아니므로 UAC로 다시 실행하고 이 창은 끝냅니다: Start-Process cmd.exe -Verb RunAs -Wait -ArgumentList '$cmdArgs'"
+        return
+    }
+    Write-Host '관리자 권한이 필요합니다. 곧 나오는 "사용자 계정 컨트롤" 창에서 "예"를 눌러 주세요.'
+    try {
+        Start-Process -FilePath cmd.exe -ArgumentList $cmdArgs -WorkingDirectory $script:Root -Verb RunAs -Wait -ErrorAction Stop
+    } catch {
+        Write-Host ''
+        Write-Host '관리자 권한을 허용하지 않아 끝냅니다.'
+        Write-Host '다시 실행해서 "예"를 누르거나, 파일을 마우스 오른쪽 → 관리자 권한으로 실행해 주세요.'
+        exit 1
+    }
+    exit $script:RelaunchCode
+}
+
+# 이 폴더가 사용자 프로필(C:\Users\...: 바탕화면, 다운로드 등)이나 OneDrive 안에 있으면 $true.
+# 그런 곳은 폴더 잠금이 소용없고(상위 폴더의 주인이 폴더를 통째로 바꿔치기할 수 있다) 동기화·정리로 파일이 사라질 수 있다.
+function Test-UnsafeLocation {
+    $r = $script:Root.TrimEnd('\') + '\'
+    $ic = [StringComparison]::OrdinalIgnoreCase
+    $bases = @((Join-Path $env:SystemDrive 'Users'))
+    if ($env:USERPROFILE) { $bases += (Split-Path -Parent $env:USERPROFILE) }
+    if ($env:OneDrive) { $bases += $env:OneDrive }
+    foreach ($b in $bases) {
+        if ($b -and $r.StartsWith($b.TrimEnd('\') + '\', $ic)) { return $true }
+    }
+    return ($r -match '(?i)\\OneDrive[^\\]*\\')
 }
 
 function Get-ServerPort {
@@ -25,6 +64,17 @@ function Get-ServerPort {
 
 function Test-PortListening([int]$Port) {
     return [bool](Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+}
+
+# 포트를 쓰는 프로그램이 누구인지: $null(비어 있음), 'self'(이 폴더의 서버), 'other'(그 밖의 프로그램, 다른 폴더의 서버 포함)
+function Get-PortOwner([int]$Port) {
+    $conn = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+    if ($conn.Count -eq 0) { return $null }
+    foreach ($cn in $conn) {
+        $p = Get-Process -Id $cn.OwningProcess -ErrorAction SilentlyContinue
+        if ($p -and $p.Path -and ($p.Path -ieq $script:Exe)) { return 'self' }
+    }
+    return 'other'
 }
 
 function Write-DryRun([string]$Text) {
@@ -100,4 +150,47 @@ function Register-AutoStart {
     }
     Write-Host '자동 시작을 등록했습니다(실행 시간 제한 없음, 배터리에서도 시작).'
     return $true
+}
+
+# 자동 시작 작업이 등록되어 있고 이 폴더의 서버시작.bat를 가리키는지. 다른 폴더를 가리키는 작업을 실행하면 엉뚱한 서버가 켜진다.
+# (시험용 MILKBANK_DRYRUN_TASK=1 이면 있는 것으로 본다. 조회만 하고 등록·실행은 하지 않는다.)
+function Test-OwnTask {
+    if ($script:DryRun -and $env:MILKBANK_DRYRUN_TASK -eq '1') { return $true }
+    try {
+        $t = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction Stop
+        $bat = Join-Path $script:Root '서버시작.bat'
+        foreach ($a in $t.Actions) {
+            if ((($a.Execute + ' ' + $a.Arguments).IndexOf($bat, [StringComparison]::OrdinalIgnoreCase)) -ge 0) { return $true }
+        }
+    } catch { }
+    return $false
+}
+
+# 작업 스케줄러 작업으로 서버를 켠다. SYSTEM 권한으로 돌아서 로그아웃해도 꺼지지 않고, 방화벽 허용 창도 뜨지 않는다.
+function Start-ServerTask {
+    if ($script:DryRun) {
+        Write-DryRun "schtasks /Run /TN `"$script:TaskName`""
+        return $true
+    }
+    & schtasks /Run /TN $script:TaskName *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# 폴더 안 파일의 "인터넷에서 받은 파일" 표시(차단)를 지운다. 안 지우면 더블클릭이나 시작할 때 보안 경고가 뜬다.
+function Unblock-Package {
+    if ($script:DryRun) {
+        Write-DryRun "Get-ChildItem -LiteralPath `"$script:Root`" -Recurse -Force -File | Unblock-File"
+        return
+    }
+    Get-ChildItem -LiteralPath $script:Root -Recurse -Force -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+}
+
+# 서버가 응답할 때까지 기다리며 /health 를 확인한다(자체 서명 인증서라 -k, PowerShell 5.1 웹 요청 대신 curl.exe).
+function Wait-ServerHealth([string]$Addr, [int]$Port) {
+    for ($n = 0; $n -lt 6; $n++) {
+        Start-Sleep -Seconds 3
+        $code = (& curl.exe -k -s -o NUL -w '%{http_code}' --max-time 5 "https://${Addr}:${Port}/health" 2>$null)
+        if ($code -eq '200') { return $true }
+    }
+    return $false
 }

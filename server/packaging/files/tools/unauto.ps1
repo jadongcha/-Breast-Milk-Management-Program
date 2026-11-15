@@ -1,14 +1,11 @@
 ﻿# 자동시작해제.bat 가 부른다.
 . (Join-Path $PSScriptRoot 'common.ps1')
 
+Ensure-Admin '자동시작해제.bat'
+
 if ($script:DryRun) {
     Write-DryRun "schtasks /Delete /TN `"$script:TaskName`" /F"
     exit 0
-}
-
-if (-not (Test-Admin)) {
-    Write-Host '이 파일을 마우스 오른쪽 → 관리자 권한으로 실행해 주세요.'
-    exit 1
 }
 
 & schtasks /Delete /TN $script:TaskName /F
