@@ -1,6 +1,6 @@
 ﻿# 다른 PC용 서버 폴더를 만든다.
 #   powershell -File packaging/build.ps1          -> dist/모유관리서버-데모/ (+ .zip)  (데모 자료 포함)
-#   powershell -File packaging/build.ps1 -Real    -> dist/모유관리서버/ (+ .zip)       (빈 DB)
+#   powershell -File packaging/build.ps1 -Real    -> dist/모유관리서버/ (+ .zip)       (DB 없음: data 폴더 없이 만든다)
 param([switch]$Real)
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +30,9 @@ if (-not $Real) {
     & uv run python scripts/make_demo_db.py (Join-Path $target 'data\milkbank.db') (Join-Path $target '데모계정.txt')
     if ($LASTEXITCODE -ne 0) { throw '데모 DB 만들기 실패' }
 }
+
+# 실제 운영용 빌드에는 DB가 절대 들어가면 안 된다(새 버전 폴더를 덮어쓸 때 운영 DB를 덮어쓰게 된다).
+if ($Real -and (Test-Path (Join-Path $target 'data'))) { throw '실제 운영용 빌드에 data 폴더가 들어 있습니다.' }
 
 # 한글 파일 이름이 깨지지 않도록 UTF-8 이름으로 압축한다(폴더 이름 포함).
 Add-Type -AssemblyName System.IO.Compression.FileSystem
