@@ -11,12 +11,24 @@ Write-Host '  모유 관리 서버 처음 설정'
 Write-Host '============================================'
 Write-Host ''
 
-# 이미 설정되어 있으면 확인
+# 이미 설정되어 있으면 무엇을 할지 묻는다
 $reset = $false
 if (Test-Path -LiteralPath 'data\tls\server.json') {
-    Write-Host '이미 설정되어 있습니다. 다시 설정하면 모든 기기에서 QR을 다시 찍어야 합니다.'
-    $ans = Read-Host '계속할까요? (Y/N)'
-    if ($ans -notmatch '^[Yy]$') {
+    Write-Host '이미 설정되어 있습니다.'
+    Write-Host '  [1] 자동 시작만 다시 등록 (인증서는 그대로, 기기는 QR을 다시 찍지 않아도 됩니다)'
+    Write-Host '  [2] 처음부터 다시 설정 (인증서를 새로 만들어서 모든 기기에서 QR을 다시 찍어야 합니다)'
+    Write-Host '  [N] 취소'
+    $choice = Read-Host '번호를 고르세요 (1/2/N)'
+    if ($choice -eq '1') {
+        Write-Host ''
+        Write-Host '폴더 권한을 확인하고 자동 시작을 다시 등록합니다.'
+        $locked = Protect-PackageFolder
+        $registered = Register-AutoStart
+        if ($locked -and $registered) { Write-Host '끝났습니다.' }
+        else { Write-Host '위 메시지를 확인해 주세요.'; exit 1 }
+        exit 0
+    }
+    if ($choice -ne '2') {
         Write-Host '설정을 바꾸지 않고 끝냅니다.'
         exit 0
     }
@@ -103,22 +115,14 @@ if (Test-Path -LiteralPath $demoFile) {
 }
 
 Write-Host ''
-Write-Host '[3/4] PC가 켜지면 서버가 저절로 시작되도록 등록합니다.'
-$bat = Join-Path $script:Root '서버시작.bat'
-$schtasksArgs = '/Create /TN "{0}" /TR "\"{1}\" /background" /SC ONSTART /RU SYSTEM /RL HIGHEST /F' -f $script:TaskName, $bat
-if ($script:DryRun) {
-    Write-DryRun "schtasks $schtasksArgs"
-    Write-DryRun '작업 설정: 실행 시간 제한 없음, 배터리에서도 시작'
+Write-Host '[3/4] 폴더를 잠그고, PC가 켜지면 서버가 저절로 시작되도록 등록합니다.'
+$locked = Protect-PackageFolder
+if (-not $locked) {
+    Write-Host '폴더를 잠그지 못해 자동 시작 등록을 하지 않습니다. 위 메시지를 확인해 주세요.'
 } else {
-    $p = Start-Process -FilePath schtasks -ArgumentList $schtasksArgs -Wait -NoNewWindow -PassThru
-    if ($p.ExitCode -ne 0) {
-        Write-Host '자동 시작을 등록하지 못했습니다. 서버는 서버시작.bat로 직접 켜야 합니다.'
-    } else {
-        # 기본값은 3일 뒤 작업을 끝내고 배터리에서는 시작하지 않으므로 바꾼다.
-        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-        Set-ScheduledTask -TaskName $script:TaskName -Settings $settings | Out-Null
-    }
+    [void](Register-AutoStart)
 }
+$bat = Join-Path $script:Root '서버시작.bat'
 
 Write-Host ''
 Write-Host '[4/4] 서버를 시작하고 확인합니다.'
@@ -148,11 +152,12 @@ Write-Host ' 마지막으로 Windows 방화벽에서 직접 허용해 주세요'
 Write-Host '============================================'
 Write-Host ' 1. 시작 메뉴에서 "고급 보안이 포함된 Windows Defender 방화벽"을 엽니다.'
 Write-Host " 2. 인바운드 규칙 → 새 규칙 → 포트 → TCP, 특정 로컬 포트 $port"
-Write-Host ' 3. 연결 허용 → 개인 네트워크(병원 내부망)만 체크 → 이름 입력 후 마침.'
+Write-Host ' 3. 연결 허용 → 이 PC가 실제로 쓰는 네트워크 종류를 체크합니다(도메인 또는 개인).'
+Write-Host '    병원 내부망이 "도메인"이면 도메인에, "개인"이면 개인에 체크하세요. 공용은 체크하지 마세요. 이름 입력 후 마침.'
 Write-Host ' 이 파일은 방화벽 규칙을 만들지 않습니다.'
 Write-Host ''
 Write-Host '서버 등록 QR 이미지를 엽니다. 출력해서 신생아실에 보관하세요.'
-$qr = Join-Path $script:Root 'data\tls\server-qr.png'
+$qr = Join-Path $script:Root '서버등록QR.png'
 if ($script:DryRun) { Write-DryRun "start `"`" `"$qr`"" }
 else { Start-Process -FilePath $qr }
 exit 0
